@@ -1,0 +1,57 @@
+---
+Tax:
+  Country: "France"
+  ProcessingOrder: "2074,2047,2044,2042"
+  Forms:
+  - Form: "2042"
+    Sections:
+    - Section: 1
+#
+#       Compute logique :
+#                 Apply Pre_TouchUp if any
+#                 If "LoopOn", Loop on each element and accumulate results per fields
+#                    Check each inputs if present and Accumulate
+#                 If Compute = "sum"
+#                    ReturnField = sum(ImputFields)
+#
+      ReqFields: "AJ"
+      Compute: "sum"
+      ReturnField: "SumIncomes"
+    - Section: 2
+      LoopOn: "BankNames"
+      InputFields: "DC,TR,BH,CK"
+      Compute: "sum"
+#       Variable Name use the scheme FxxxxSxFieldName
+#                     Bellow F2074S5F524_Resultat refer to a variable name F524_Resultat
+#                     in Form 2074 in Section 5
+      Pre_TouchUp: "if 'F2074S5F524_Resultat' in globals(): DC = DC + eval(i)"
+      ReturnField: "InvestIncomes"
+  - Form: "2044"
+    Sections:
+    - Section: 2
+      ReqFields: "524_Resultat"
+      Compute: "sum"
+  - Form: "2074"
+    FinalResult: "F1133"
+    CarryTo2042: "S3VG"
+    Sections:
+    - Section: 5
+      ReqFields: "F514,F515,F517,F520,F521,F522"
+      LoopOn: "ShareNames"
+      Compute_Custom: "F516 = F514 * F515"
+      Compute_Custom: "F518 = F516 - F517"
+      Compute_Custom: "F523 = F521 + F522"
+      Compute_Custom: "F524 = F518 - F523"
+      RepportFields: "F511,F512,F514,F515,F517,F518,F520,F521,F522,F523,F524"
+    - Section: 9
+      ReqFields: "F524"
+      LoopOn: "ShareNames"
+      Compute_Custom: "F903 = F524"
+      Compute_Custom: "F945 = F903"
+      RepportFields: "F903,F945"
+    - Section: 11
+      ReqFields: "F945"
+      LoopOn: "ShareNames"
+      Compute_Custom: "F1133 = F945"
+      RepportFields: "F1133"
+...

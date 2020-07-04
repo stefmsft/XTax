@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Custom
+2019.*
+*.xlsx
+*.pdf
+.vscode
+TaxCalculation.*
+Test.ipynb
+XTaxProto.*
