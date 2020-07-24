@@ -2,35 +2,109 @@
 Tax:
   Country: "France"
   ProcessingOrder: "2074,2047,2044,2042"
+  NbPart: 1
+
   Forms:
   - Form: "2042"
     Sections:
     - Section: 1
-#
-#       Compute logique :
-#                 Apply Pre_TouchUp if any
-#                 If "LoopOn", Loop on each element and accumulate results per fields
-#                    Check each inputs if present and Accumulate
-#                 If Compute = "sum"
-#                    ReturnField = sum(ImputFields)
-#
       ReqFields: "AJ"
-      Compute: "sum"
-      ReturnField: "SumIncomes"
     - Section: 2
+      ReqFields: "DC,TR,BH,CK"
       LoopOn: "BankNames"
-      InputFields: "DC,TR,BH,CK"
-      Compute: "sum"
-#       Variable Name use the scheme FxxxxSxFieldName
-#                     Bellow F2074S5F524_Resultat refer to a variable name F524_Resultat
-#                     in Form 2074 in Section 5
-      Pre_TouchUp: "if 'F2074S5F524_Resultat' in globals(): DC = DC + eval(i)"
-      ReturnField: "InvestIncomes"
+      RepportFields: "DC,TR,BH,CK"
+      Agregate: "DC,TR,BH,CK"
+
   - Form: "2044"
+    FinalResult: "F651,F630,DeficitRevFon,DeficitRevGlo"
+    CarryTo2042: "S4BD,S4BA,S4BB,S4BC"
     Sections:
     - Section: 2
-      ReqFields: "524_Resultat"
-      Compute: "sum"
+      ReqFields: "F201,F211,F250"
+      LoopOn: "PropertyNames"
+      Compute01: "Recettes = F211"
+      Compute02: "if 'F212' in globals(): Recettes = Recettes + F212"
+      Compute03: "if 'F213' in globals(): Recettes = Recettes + F213"
+      Compute04: "if 'F214' in globals(): Recettes = Recettes + F214"
+      Compute05: "F215 = Recettes"
+      Compute06: "Charges = 0"
+      Compute07: "if 'F221' in globals(): Charges = Charges + F221"
+      Compute08: "if 'F222' in globals(): Charges = Charges + F222"
+      Compute09: "if 'F223' in globals(): Charges = Charges + F223"
+      Compute10: "if 'F224' in globals(): Charges = Charges + F224"
+      Compute11: "if 'F225' in globals(): Charges = Charges + F225"
+      Compute12: "if 'F226' in globals(): Charges = Charges + F226"
+      Compute13: "if 'F227' in globals(): Charges = Charges + F227"
+      Compute14: "if F201 > 0: F228 = round(F215*F201/100,0)"
+      Compute15: "if 'F228' in globals(): Charges = Charges + F228"
+      Compute16: "if 'F229' in globals(): Charges = Charges + F229"
+      Compute17: "if 'F230' in globals(): Charges = Charges + F230"
+      Compute18: "if 'F231' in globals(): Charges = Charges - F231"
+      Compute19: "F240 = Charges"
+      Compute20: "F261 = F215 - F240 - F250"
+      Compute21: "if 'F262' in globals(): F263 = F261 + F262"
+      Compute22: "if 'F262' not in globals(): F263 = F261"     
+      Compute23: "if 'F201' not in globals(): print('no')"
+      RepportFields: "F201,F211,F250,F215,F221,F222,F223,F224,F227,F228,F229,F230,F240,F261,F263"
+      Agregate: "F263,F250,F215,F240"
+      Save: "F263,F250,F215,F240"
+    - Section: 6
+      ReqFields: "F263"
+      Compute01: "F630 = F263"
+      Compute02: "Benefice = 0"
+      Compute03: "F651 = 0"
+      Compute04: "if 'ListDeficit' in self.VarDict.key() and F630 > 0: LRepart,self.VarDict['ListDeficit'],Relicat = self.__AllocateDeficit(F630,self.VarDict['ListDeficit'])"
+      Compute05: "if 'ListDeficit' in self.VarDict.key(): F651 = sum(self.VarDict['ListDeficit'])"
+      Compute06: "F630 = -Relicat"
+      Compute07: "if F630 > 0: Benefice = F630"
+      Compute08: "self.VarDict['ListAlloc'] = LRepart"
+      RepportFields: "F630,F651,self.VarDict['ListDeficit'],self.VarDict['ListAlloc']"
+      Save: "F630,F651"
+    - Section: 7
+      ReqFields: "F215,F250,F240,F630,F651"
+      Compute01: "F702 = F215"
+      Compute02: "F703 = F250"
+      Compute03: "F704 = F240"
+      Compute04: "F706 = F702 - F703 - F704"
+      Compute05: "Case7A = abs(F706)"
+      Compute06: "if F703 < F702: F708 = F702 - F703 - F704"
+      Compute07: "Case7C = 0"
+      Compute08: "Case7E = 0"
+      Compute09: "if 'F708' in globals() and F708 < 0: Case7C = max(abs(F708),10700)"
+      Compute10: "if 'F708' in globals() and F708 < 0: Case7E = max(abs(F708)-10700,0)"
+      Compute11: "if 'F708' in globals() and F708 > 0: Case7E = F706"
+      Compute12: "if F703 > F702: F712 = F702 - F703"
+      Compute13: "Case7B = 0"
+      Compute14: "Case7D = 0"
+      Compute15: "if 'F712' in globals(): Case7C = max(abs(F704),10700)"
+      Compute16: "if 'F712' in globals() and F704 > 10700: Case7B = max(abs(F704)-10700,0)"
+      Compute17: "Case7I = Case7B + Case7D"
+      Compute18: "Case7J = Case7C + Case7E"
+      Compute19: "Case7H = Case7A"
+      Compute20: "DeficitRevFon = 0"
+      Compute21: "DeficitRevGlo = 0"
+      Compute22: "if Case7I > Case7H: DeficitRevFon = Case7I - Case7J"
+      Compute23: "if Case7I > Case7H: DeficitRevGlo = Case7I - Case7J"
+      Compute24: "if Case7I <= Case7H: DeficitRevGlo = Case7J - Case7H + Case7I"
+      RepportFields: "Case7C,Case7E"
+      Save: "DeficitRevFon,DeficitRevGlo"
+
+  - Form: "2047"
+    FinalResult: "F222"
+    CarryTo2042: "S2DC"
+    Sections:
+    - Section: 2
+      ReqFields: "F203,F204,F206"
+      LoopOn: "ShareNames"
+      Compute01: "F205 = round(F203*F204/100,0)"
+      Compute02: "F207 = F205"
+      Compute03: "F208 = F203 + F207"
+      Compute04: "F221 = F208"
+      Compute05: "F222 = F221"
+      RepportFields: "F203,F204,F203,F204,F222"
+      Agregate: "F222"
+      Save: "F222"
+
   - Form: "2074"
     FinalResult: "F1133"
     CarryTo2042: "S3VG"
@@ -38,20 +112,108 @@ Tax:
     - Section: 5
       ReqFields: "F514,F515,F517,F520,F521,F522"
       LoopOn: "ShareNames"
-      Compute_Custom: "F516 = F514 * F515"
-      Compute_Custom: "F518 = F516 - F517"
-      Compute_Custom: "F523 = F521 + F522"
-      Compute_Custom: "F524 = F518 - F523"
+      Compute01: "F516 = F514 * F515"
+      Compute02: "F518 = F516 - F517"
+      Compute03: "F523 = F521 + F522"
+      Compute04: "F524 = F518 - F523"
       RepportFields: "F511,F512,F514,F515,F517,F518,F520,F521,F522,F523,F524"
+      Agregate: "F524"
+      Save: "F524"
     - Section: 9
       ReqFields: "F524"
-      LoopOn: "ShareNames"
-      Compute_Custom: "F903 = F524"
-      Compute_Custom: "F945 = F903"
+      Compute01: "F903 = F524"
+      Compute02: "F945 = F903"
       RepportFields: "F903,F945"
+      Save: "F945"
     - Section: 11
       ReqFields: "F945"
-      LoopOn: "ShareNames"
-      Compute_Custom: "F1133 = F945"
+      Compute01: "F1133 = F945"
       RepportFields: "F1133"
+      Save: "F1133"
+
+  RangeGrids:
+  - Grid: 2020
+    Ranges:
+    - R1: [0,10064,0]
+    - R2: [10064,25659,11]
+    - R3: [25659,73369,30]
+    - R4: [73369,157806,41]
+    - R5: [156244,999999999,45]
+  - Grid: 2019
+    Ranges:
+    - R1: [0,10064,0]
+    - R2: [10064,27794,14]
+    - R3: [27794,74517,30]
+    - R4: [74517,157806,41]
+    - R5: [157806,999999999,45]
+  - Grid: 2018
+    Ranges:
+    - R1: [0,9964,0]
+    - R2: [9964,27519,14]
+    - R3: [27519,73779,30]
+    - R4: [73779,156244,41]
+    - R5: [156244,999999999,45]
+  - Grid: 2017
+    Ranges:
+    - R1: [0,9807,0]
+    - R2: [9807,27086,14]
+    - R3: [27086,72617,30]
+    - R4: [72617,153783,41]
+    - R5: [153783,999999999,45]
+  - Grid: 2016
+    Ranges:
+    - R1: [0,9710,0]
+    - R2: [9710,26818,14]
+    - R3: [26818,71898,30]
+    - R4: [71898,152260,41]
+    - R5: [152260,999999999,45]
+  - Grid: 2015
+    Ranges:
+    - R1: [0,9700,0]
+    - R2: [9700,26791,14]
+    - R3: [26791,71826,30]
+    - R4: [71826,152108,41]
+    - R5: [152108,999999999,45]
+  - Grid: 2014
+    Ranges:
+    - R1: [0,9690,0]
+    - R2: [9690,26764,14]
+    - R3: [26764,71754,30]
+    - R4: [71754,151956,41]
+    - R5: [151956,999999999,45]
+  - Grid: 2013
+    Ranges:
+    - R1: [0,6011,0]
+    - R2: [6011,11991,6]
+    - R3: [11991,26631,14]
+    - R4: [26631,71397,30]
+    - R5: [71397,999999999,41]
+  - Grid: 2012
+    Ranges:
+    - R1: [0,5963,0]
+    - R2: [5963,11896,5.5]
+    - R3: [11896,26420,14]
+    - R4: [26420,70830,30]
+    - R5: [70830,999999999,40]
+  - Grid: 2011
+    Ranges:
+    - R1: [0,5963,0]
+    - R2: [5963,11896,5.5]
+    - R3: [11896,26420,14]
+    - R4: [26420,70830,30]
+    - R5: [70830,999999999,40]
+  - Grid: 2010
+    Ranges:
+    - R1: [0,5963,0]
+    - R2: [5963,11896,5.5]
+    - R3: [11896,26420,14]
+    - R4: [26420,70830,30]
+    - R5: [70830,999999999,40]
+  - Grid: 2009
+    Ranges:
+    - R1: [0,5875,0]
+    - R2: [5875,11720,5.5]
+    - R3: [11720,26030,14]
+    - R4: [26030,69783,30]
+    - R5: [69783,999999999,40]
 ...
