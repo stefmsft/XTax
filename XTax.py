@@ -15,7 +15,7 @@
 # ---
 
 # +
-#### import yaml
+import yaml
 import pandas as pd
 import os
 import datetime
@@ -45,6 +45,7 @@ class Tax:
                 self.__Log("Automatic load of {}".format(fname))
                 self.LoadProfile(fname)
                 Profile_Name=fname
+
         self.__Log("End of Init")
         
 #----------------------------------------------------------------------------------------------------------------------        return
@@ -117,21 +118,24 @@ class Tax:
     def __ExecStr(self, string):
 
         result = True
-        bef = globals().copy()
+        bef = locals().copy()
         try:
-            exec(string, globals())
+            exec(string, globals(),locals())
         except Exception as e:
             self.__Log(f'Exception while Computing {string}',5)
             self.__Log(f'Exception :  {e.__class__}',5)
             result = False
-        aft= globals().copy()
+        aft= locals().copy()
         
         if result:
             for k in aft.keys():
-                if k not in bef.keys() and k != 'ldv':
-                    self.Local2Del.append(k)
+                if k not in bef.keys() and k != 'bef':
+                    if k not in self.Local2Del:
+                        self.Local2Del.append(k)
+                    globals()[k]=locals()[k]
             if self.EnableComputeLog:
-                self.ComputeLogBuffer.append(string)
+                if not string.startswith('del') and not string.startswith('ldv'):
+                    self.ComputeLogBuffer.append(string)
         
         return result
 
@@ -192,8 +196,8 @@ class Tax:
                                             self.FieldDict[fieldname]=dv3
                                             self.__Log(f'Field {fieldname}: {dv3}',2)
                                 else:
-                                    self.VarDict[k2]=dv2
-                                    self.__Log(f'Variable {k2}: {dv2}',2)            
+                                    self.VarDict[f'{curform}{cursection}_{k2}']=f'{dv2}'
+                                    self.__Log(f'Variable {curform}{cursection}_{k2}: {dv2}',2)            
             
         self.__Log("End of FlatenTP")
         return
@@ -329,6 +333,9 @@ class Tax:
     def __ProcesSteps(self,Steps,CurForm):
         self.__Log(f'Beginning of ProcesSteps for {CurForm}')
 
+        if self.EnableComputeLog:
+            self.ComputeLogBuffer.append(f'#Forms {CurForm}')
+
         result = True
         currentfieldnamecontext=f"{CurForm}"
         currentloopext=""
@@ -344,23 +351,30 @@ class Tax:
             currentloopvl=[]
             curcompute=[]
             
-            # Suppress all variable generated for the previous section processing
-            if len(lvarlist) > 0:
-                for lvar in lvarlist:
-                    self.__ExecStr(f'del {lvar}')
-
             currentfieldnamecontext = f"F{CurForm}S{cursection}"
             self.__Log(f"Current Field Prefix {currentfieldnamecontext}")
+            
+            if self.EnableComputeLog and cursection!=0:
+                self.ComputeLogBuffer.append(f'#  Section {cursection}')
+
             
             # Narrow the Steps to the actual section
             StepsForCurSection = Steps[Steps['Section']==cursection]
 
+            # CleanUp localy created Variable before processing section
+            for v in self.Local2Del:
+                r = self.__ExecStr(f'del globals()["{v}"]')
+                if r == False:
+                    self.__Log(f'Error : While cleaning variable {v}',4)
+            self.Local2Del.clear()
+            
             # Look for loopon
             sFor="loopon"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
                 dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
                 currentloopext=StepsForCurSection.loc[dfb,"Step"]
                 self.__Log("\nLoop on detected")
+                currentloopext = f'{currentfieldnamecontext}_{currentloopext}'
                 if currentloopext in self.VarDict.keys():
                     self.__Log(f'Loop On : {self.VarDict[currentloopext]}')
                     currentloopvl = self.VarDict[currentloopext].split(",")
@@ -387,9 +401,9 @@ class Tax:
                             ifv[i] = f"{currentfieldnamecontext}_{ifv[i]}_{lctxt}"
                     # Gen LoopName and verify required Fields
                     for i in ifv:
-                        self.__Log(f'Checking required field {i}')
+                        self.__Log(f'Checking required field or variable {i}')
                         s0name = f'F{CurForm}S0_{i.split("_")[1]}'
-                        lvname = f'{i.split("_")[1]}'
+                        lvname = f'F{CurForm}S{cursection}_{i.split("_")[1]}'
                         # If name not in the local section field dict
                         if i not in self.FieldDict.keys():
                             #Check in S0 contect of the Field Dict
@@ -397,11 +411,11 @@ class Tax:
                                 self.__Log(f'Loading Field variable {i} with its global S0 value : {self.FieldDict[s0name]}',2)
                                 self.FieldDict[i]=self.FieldDict[s0name]
                             #Check as a variable
-                            elif lvname not in self.VarDict.key():
-                                self.__Log(f'    not defined yet. Initializing with 0',2)
+                            elif lvname not in self.VarDict.keys():
+                                self.__Log(f'    field or variable not defined yet. Initializing as a field with 0',2)
                                 self.FieldDict[i]=0
                             else:
-                                self.__Log(f'    found as a variable with value {self.VarDict.key[i]}',2)
+                                self.__Log(f'    found as a variable with value {self.VarDict[i]}',2)
                         else:
                             self.__Log(f'    found with value {self.FieldDict[i]}',2)
                     
@@ -437,12 +451,17 @@ class Tax:
                 #Foreach element in currentloopvl
                 for lctxt in currentloopvl:
                     self.__Log(f'\nProcessing on variable {lctxt}')
-                    # CleanUp localy created Variable
+
+                    if self.EnableComputeLog and lctxt!="*":
+                        self.ComputeLogBuffer.append(f'#    Loop {lctxt}')
+                    
+                    # CleanUp localy created Variable before processing loopOn
                     for v in self.Local2Del:
-                        r = self.__ExecStr(f'del {v}')
+                        r = self.__ExecStr(f'del globals()["{v}"]')
                         if r == False:
                             self.__Log(f'Error : While cleaning variable {v}',4)
                     self.Local2Del.clear()
+
                     # Propagate localy the Fields of the section
                     self.__Log("\nField propagation in Locals")
                     for k in self.FieldDict.keys():
@@ -461,12 +480,29 @@ class Tax:
                                     self.__Log(f'Error : While emitting "{lf}"',4)
                                     result = False
                                     break                            
+                    # Propagate localy the variables of the section
+                    self.__Log("\nVariable propagation in Locals")
+                    for k in self.VarDict.keys():
+                        if k.startswith(f'{currentfieldnamecontext}'):
+                            lf = k.split('_')[1]
+                            if isinstance(self.VarDict[k],str):
+                                execstring = f'{lf} = "{self.VarDict[k]}"'
+                            else:
+                                execstring = f'{lf} = {self.VarDict[k]}'
+                            r = self.__ExecStr(execstring)
+                            if lf in globals().keys() and r != False:
+                                self.__Log(f'Variable {lf} successfully created')
+                                self.__Log(f'{lf} = {globals()[lf]}')
+                            else:
+                                self.__Log(f'Error : While emitting "{lf}"',4)
+                                result = False
+                                break                            
+
                     # Compute
                     self.__Log("\nCompute")
                     for c in curcompute:
                         self.__Log(f'Processing {c}')
                         r = self.__ExecStr(c)
-                        print (self.Local2Del)
                         if r != True:
                             break
                     # Propagate back to dictionary
@@ -483,22 +519,24 @@ class Tax:
                         r = self.__ExecStr(f'ldv = {f}')
                         if r == True:
                             self.FieldDict[updf] = ldv
+                            self.Local2Del.remove("ldv")
                             self.__Log(f'    New value : {self.FieldDict[updf]}')
 
                     self.__Log("\nFor fields in report")
                     for k in rfv:
                         lf = k.split('_')[1]
+                        if self.EnableComputeLog:
+                            self.ComputeLogBuffer.append(f'print ("{lf} =",{lf})')
                         if lf not in self.Local2Del:
                             if lctxt == "*" or lctxt == k.split('_')[2]:
                                 self.__Log(f'Updating self.FieldDict["{k}"]')
                                 if  k in self.FieldDict.keys():
-                                    self.__Log(f'    Initial value : {self.FieldDict[k]}')
-                                r = self.__ExecStr(f'ldv = {lf}')
-                                if r == True:
-                                    self.FieldDict[k] = ldv
+                                    self.__Log(f'Value of self.FieldDict["{k}"] = {self.FieldDict[k]}]')
                                 else:
                                     self.FieldDict[k] = 0
-                                self.__Log(f'    New value : {self.FieldDict[k]}')
+                                    self.__Log(f'New value of self.FieldDict["{k}"] = {self.FieldDict[k]}')
+
+
 
             # Look for Agregate
             sFor="agregate"
@@ -538,45 +576,9 @@ class Tax:
                         self.__Log(f'Loading {targetf} with value of {sectionf} = {self.FieldDict[sectionf]}')
                         self.FieldDict[targetf]=self.FieldDict[sectionf]
                 
-        self.__Log(f'End of ProcesSteps')
+            self.__Log(f'\n')
+        self.__Log(f'End of ProcesSteps\n\n')
         return result
-
-#  Function AllocateDeficit
-#
-#  Params:
-#         amount : amount to distribute
-#         amountlist : list of amount available for the distribution
-#
-#  Description :
-#       Given a Forms Name, the function return a step dictionnary to execute in order to process the Form
-#
-#  Return:
-#        repartlist : List of amount distributed
-#        newamountlist : list of amount after distribution
-#        remains : amount remaining if all can't be distributed
-#
-    def __AllocateDeficit(self,amount,amountlist):
-        self.__Log(f'Beginning of AllocateDeficit of {amount} thru {amountlist}')
-
-        repartlist = []
-        newamountlist = []
-        remains = amount
-        
-        for a in amountlist:
-            remains = amount - a
-            if remains <= 0:
-                newamountlist.append(abs(remains))
-                repartlist.append(amount)
-                remains = 0
-                amount = 0
-            else:
-                newamountlist.append(0)
-                repartlist.append(a)
-                amount = remains
-        
-        self.__Log(f'End of LoadStepsFor returning reparlist = {repartlist}, updated amountlist {newamountlist}, remaining amount {remains}')
-        return StepsFor
-
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Public Method/function    
@@ -637,6 +639,78 @@ class Tax:
 
         self.__Log("End of Object Dump")
         return
+    
+#  Function CleanUpListInt
+#
+#  Params:
+#         lst : list to Clean
+#
+#  Description :
+#       
+#
+#  Return:
+#        lst : Cleaned List
+#
+    def CleanUpListInt(self,lst):
+        self.__Log(f'Beginning of CleanUpList for {lst}')
+        
+        if not isinstance(lst, list):
+            if isinstance(lst, str):
+                if lst[:1] == "[":
+                    lst = lst[1:len(lst)-1].split(",")
+                else:
+                    lst = lst.split(",")
+                for a in lst:
+                    lst[lst.index(a)] = int(a)
+                    
+        self.__Log(f'End of CleanUpList returning {lst}')
+        return lst
+    
+#  Function AllocateDeficit
+#
+#  Params:
+#         amount : amount to distribute
+#         amountlist : list of amount available for the distribution
+#
+#  Description :
+#
+#  Return:
+#        repartlist : List of amount distributed
+#        newamountlist : list of amount after distribution
+#        remains : amount remaining if all can't be distributed
+#
+    def AllocateDeficit(self,amount,amountlist):
+        self.__Log(f'Beginning of AllocateDeficit of {amount} thru {amountlist}')
+
+        repartlist = []
+        newamountlist = []
+        remains = amount
+        
+        #Input Sanitization
+        
+        amount = int(amount)
+        #Check if the 2nd arg is really a list (direct call) or a string representing a list (call from the yaml)   
+        self.CleanUpListInt(amountlist)
+
+        try:
+            for a in amountlist:
+                remains = amount - a
+                if remains <= 0:
+                    newamountlist.append(abs(remains))
+                    repartlist.append(amount)
+                    remains = 0
+                    amount = 0
+                else:
+                    newamountlist.append(0)
+                    repartlist.append(a)
+                    amount = remains
+        except Exception as e:
+            self.__Log(f'Exception in AllocatDeficit',5)
+            self.__Log(f'Exception :  {e.__class__}',5)            
+        
+        self.__Log(f'End of AllocateDeficit returning reparlist = {repartlist}, updated amountlist {newamountlist}, remaining amount {remains}')
+        return repartlist,newamountlist,remains
+
 
 #  Function DisplayComputeLog
 #

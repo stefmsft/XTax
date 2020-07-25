@@ -17,7 +17,7 @@ Forms:
               - CK_AXA: 2
               - CK_FORTUNEO: 2
           - Section : 3
-             Fields:
+            Fields:
                - VG: 126
           - Section : 4
             Fields:
@@ -62,27 +62,16 @@ Forms:
               - F231_Roquette : 458
               - F250_Roquette : 3566
           - Section : 6
-            Fields:
-            RepartitionNames: "Deficit,Imputation"
-              - F65010_Deficit : 835
-              - F65010_Imputation : 0
-              - F65011_Deficit : 3246
-              - F65011_Imputation : 0
-              - F65012_Deficit : 4642
-              - F65012_Imputation : 0
-              - F65013_Deficit : 5579
-              - F65013_Imputation : 0
-              - F65014_Deficit : 7194
-              - F65014_Imputation : 0
-              - F65015_Deficit : 4589
-              - F65015_Imputation : 0
+            ListDeficit: [835,3246,4642,5579,7194,4589]
+            ListAlloc: [0,0,0,0,0,0]
     - Form    : "2047"
       Sections:
           - Section : 2
+            ShareNames: "Msft"
             Fields:
-              - F201 : "Etat Unis"
-              - F203 : 23
-              - F204 : 18
+              - F201_Msft : "Etat Unis"
+              - F203_Msft : 23
+              - F204_Msft : 18
     - Form    : "2074"
       Sections:
           - Section : 5
