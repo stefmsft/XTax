@@ -1,9 +1,12 @@
+Year: 2018
+NbParts: 1
 Forms:
     - Form    : "2042"
       Sections:
           - Section : 1
+            HouseholdNames: "Stephane"
             Fields:
-              - AJ: 105326
+              - AJ_Stephane: 105326
           - Section : 2
             BankNames: "AXA,CE,FORTUNEO"
             Fields:
@@ -17,12 +20,8 @@ Forms:
               - CK_AXA: 2
               - CK_FORTUNEO: 2
           - Section : 3
-            Fields:
-               - VG: 126
           - Section : 4
             Fields:
-              - BC: 10556
-              - BD: 26085
               - BZ: True
           - Section : 6
             Fields:
@@ -30,12 +29,12 @@ Forms:
               - DE: 165
               - QS: 9112
           - Section : 7
-            AvanceReduc: 3668
             Fields:
               - DB: 1318
               - HV: 22000
           - Section : 8
             Fields:
+              - HV: 3868
               - UU: True
     - Form    : "2044"
       Sections:
@@ -60,7 +59,8 @@ Forms:
               - F227_Roquette : 140
               - F230_Roquette : 995
               - F231_Roquette : 458
-              - F250_Roquette : 3566
+#              - F250_Roquette : 3566   <-Vrai valeure mais erreur lors du remplissage 2018 :-(
+              - F250_Roquette : 0
           - Section : 6
             ListDeficit: [835,3246,4642,5579,7194,4589]
             ListAlloc: [0,0,0,0,0,0]

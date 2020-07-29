@@ -33,7 +33,7 @@ class Tax:
 #
 #  Return: Nothing
 #
-    def __init__(self, year=2010, loglevel=3,autoload=True):
+    def __init__(self, year=2010, loglevel=2,autoload=True):
         self.LogLevel = loglevel
         self.__Log("Beginning of Init")
         self.__Reset()
@@ -64,10 +64,12 @@ class Tax:
 
         self.__Log("Reset Properties")
         self.Year = 0
+        self.NbParts = 1
         self.bProfileLoaded = False
         self.bTaxDefLoaded = False
         self.bFormsProcessed = False
         self.bTaxCalculted = False
+        self.bIRCalulated = False
         self.LogLevel = 3
         self.RawTaxProfile = None
         self.RawTaxDef = None
@@ -76,7 +78,7 @@ class Tax:
         self.FieldDict = {}
         self.StepperDict={}
         self.GVarTaxDefDict={}
-        self.ResultDict = {}
+        self.ReportDict = {}
         self.EnableComputeLog = False
         self.ComputeLogBuffer = []
         self.Local2Del = []
@@ -179,25 +181,36 @@ class Tax:
         self.__Log("Beginning of FlatenTP")
         
         if self.RawTaxProfile != None:
-            for i1, lv1 in enumerate(self.RawTaxProfile["Forms"]):
-                for k1, dv1 in lv1.items():
-                    if k1.lower() == "form":
-                        self.FormList.append(dv1)
-                        curform="F"+str(dv1)
-                    if k1.lower() == "sections":
-                        for i2, lv2 in enumerate(dv1):
-                            for k2, dv2 in lv2.items():
-                                if k2.lower() == "section":
-                                    cursection="S"+str(dv2)
-                                elif k2.lower() == "fields":
-                                    for i3, lv3 in enumerate(dv2):
-                                        for k3, dv3 in lv3.items():
-                                            fieldname = curform + cursection + "_" + k3
-                                            self.FieldDict[fieldname]=dv3
-                                            self.__Log(f'Field {fieldname}: {dv3}',2)
-                                else:
-                                    self.VarDict[f'{curform}{cursection}_{k2}']=f'{dv2}'
-                                    self.__Log(f'Variable {curform}{cursection}_{k2}: {dv2}',2)            
+            for gv in self.RawTaxProfile:
+                if gv != "Forms":
+                    try:
+                        self.VarDict[f'GV_{gv}']=int(f'{self.RawTaxProfile[gv]}')
+                    except:
+                        self.VarDict[f'GV_{gv}']=f'{self.RawTaxProfile[gv]}'
+                        pass
+                    self.__Log(f'    Variable GV_{gv}: {self.RawTaxProfile[gv]}',2)
+            if 'Forms' in self.RawTaxProfile:
+                self.__Log(f'\nLoading Forms variables',2)
+                for i1, lv1 in enumerate(self.RawTaxProfile["Forms"]):
+                    for k1, dv1 in lv1.items():
+                        if k1.lower() == "form":
+                            self.FormList.append(dv1)
+                            curform="F"+str(dv1)
+                            self.__Log(f'  Form {curform}',2)
+                        if k1.lower() == "sections":
+                            for i2, lv2 in enumerate(dv1):
+                                for k2, dv2 in lv2.items():
+                                    if k2.lower() == "section":
+                                        cursection="S"+str(dv2)
+                                    elif k2.lower() == "fields":
+                                        for i3, lv3 in enumerate(dv2):
+                                            for k3, dv3 in lv3.items():
+                                                fieldname = curform + cursection + "_" + k3
+                                                self.FieldDict[fieldname]=dv3
+                                                self.__Log(f'    Field {fieldname}: {dv3}',2)
+                                    else:
+                                        self.VarDict[f'{curform}{cursection}_{k2}']=f'{dv2}'
+                                        self.__Log(f'    Variable {curform}{cursection}_{k2}: {dv2}',2)            
             
         self.__Log("End of FlatenTP")
         return
@@ -320,6 +333,31 @@ class Tax:
         self.__Log(f'End of LoadStepsFor {FormsName}')
         return StepsFor
 
+#  Function GetSectionFields
+#
+#  Params:
+#         fns : Form string name
+#         fdict : Dictionary where to populate fields:values
+#
+#  Description :
+#       
+#
+#  Return:
+#        flds : list of field=value
+#
+    def __GetSectionFields(self,fns,fdict):
+        self.__Log(f'Beginning of __GetSectionFields for forms {fns}')
+
+        flds = [f'{k}={self.FieldDict[k]}' for k in list(self.FieldDict.keys()) if fns in k[:len(fns)]]
+        #Gen a dict with fields:values
+        for li in flds:
+            isl = li.split("=")
+            if len(isl) > 1:
+                fdict[isl[0]]=isl[1]
+
+        self.__Log(f'End of GetSectionFields {fdict}')
+        return flds
+
 #  Function ProcesSteps
 #
 #  Params:
@@ -345,8 +383,8 @@ class Tax:
         
         # Focus on each section of the Form
         for cursection in sorted(Sg.groups.keys()):
-            self.__Log(f'\nProcessing Section : {cursection}',2)
-            
+            if cursection != 0: self.__Log(f'\n    Processing Section : {cursection}',2)
+
             currentloopext=""
             currentloopvl=[]
             curcompute=[]
@@ -360,6 +398,7 @@ class Tax:
             
             # Narrow the Steps to the actual section
             StepsForCurSection = Steps[Steps['Section']==cursection]
+            self.__Log(StepsForCurSection['Action'])
 
             # CleanUp localy created Variable before processing section
             for v in self.Local2Del:
@@ -408,16 +447,16 @@ class Tax:
                         if i not in self.FieldDict.keys():
                             #Check in S0 contect of the Field Dict
                             if s0name in self.FieldDict.keys():
-                                self.__Log(f'Loading Field variable {i} with its global S0 value : {self.FieldDict[s0name]}',2)
+                                self.__Log(f'Loading Field variable {i} with its global S0 value : {self.FieldDict[s0name]}')
                                 self.FieldDict[i]=self.FieldDict[s0name]
                             #Check as a variable
                             elif lvname not in self.VarDict.keys():
-                                self.__Log(f'    field or variable not defined yet. Initializing as a field with 0',2)
+                                self.__Log(f'    field or variable not defined yet. Initializing as a field with 0')
                                 self.FieldDict[i]=0
                             else:
-                                self.__Log(f'    found as a variable with value {self.VarDict[i]}',2)
+                                self.__Log(f'    found as a variable with value {self.VarDict[i]}')
                         else:
-                            self.__Log(f'    found with value {self.FieldDict[i]}',2)
+                            self.__Log(f'    found with value {self.FieldDict[i]}')
                     
                                                             
             #Look for repportfields
@@ -434,9 +473,10 @@ class Tax:
                     fv = StepsForCurSection.loc[dfb,"Step"].split(",")
                     for i in range(len(fv)):
                         if lctxt == "*":
-                            rfv.append(f"{currentfieldnamecontext}_{fv[i]}")
+                            fn = f"{currentfieldnamecontext}_{fv[i]}"
                         else:
-                            rfv.append(f"{currentfieldnamecontext}_{fv[i]}_{lctxt}")
+                            fn = f"{currentfieldnamecontext}_{fv[i]}_{lctxt}"
+                        rfv.append(fn)
                 self.__Log(f'List of Repport fields : {rfv}')
                                 
             # Look for compute_custom
@@ -504,6 +544,7 @@ class Tax:
                         self.__Log(f'Processing {c}')
                         r = self.__ExecStr(c)
                         if r != True:
+                            result = False
                             break
                     # Propagate back to dictionary
                     self.__Log("\nField back propagation to dictionary")
@@ -521,6 +562,8 @@ class Tax:
                             self.FieldDict[updf] = ldv
                             self.Local2Del.remove("ldv")
                             self.__Log(f'    New value : {self.FieldDict[updf]}')
+                        if updf in rfv:
+                            self.ReportDict[updf]=self.FieldDict[updf]
 
                     self.__Log("\nFor fields in report")
                     for k in rfv:
@@ -535,8 +578,10 @@ class Tax:
                                 else:
                                     self.FieldDict[k] = 0
                                     self.__Log(f'New value of self.FieldDict["{k}"] = {self.FieldDict[k]}')
+                            self.ReportDict[updf]=self.FieldDict[k]
 
-
+#dbg
+#            self.LogLevel = 1
 
             # Look for Agregate
             sFor="agregate"
@@ -545,8 +590,9 @@ class Tax:
                 agglist=StepsForCurSection.loc[dfb,"Step"].split(",")
                 self.__Log("\nAgregate detected")
                 self.__Log(f'\nField list to Aggregate : {agglist}')
-
+                
                 for f in agglist:
+                    f2clean=[]
                     lookupf = f'{currentfieldnamecontext}_{f}'
                     aggval = 0
                     for k in self.FieldDict.keys():
@@ -554,12 +600,21 @@ class Tax:
                             self.__Log(f'Found {k} = {self.FieldDict[k]} to aggregate')
                             try:
                                 aggval = aggval + self.FieldDict[k]
+                                f2clean.append(k)
                             except:
-                                self.__Log(f'Exception while aggregating {lookupf}',5)
-                                pass
+                                self.__Log(f'Exception while aggregating {k}',5)
+                                result = False
+                                break
                     aggval = int(round(aggval))
+                    #Cleanup the FieldDict after Aggregation
+                    for fc in f2clean:
+                        del self.FieldDict[fc]
+                    
                     self.__Log(f'Loading self.FieldDict[{lookupf}] with {aggval}')
                     self.FieldDict[lookupf]=aggval
+                    
+#dbg
+#            self.LogLevel = 3
                 
             # Look for Save
             sFor="save"
@@ -575,13 +630,51 @@ class Tax:
                     if sectionf in self.FieldDict.keys():
                         self.__Log(f'Loading {targetf} with value of {sectionf} = {self.FieldDict[sectionf]}')
                         self.FieldDict[targetf]=self.FieldDict[sectionf]
+            
                 
-            self.__Log(f'\n')
-        self.__Log(f'End of ProcesSteps\n\n')
+        # At the End ( After looping on each section) 
+        # Get the steps for section 0
+        StepsForCurSection = Steps[Steps['Section']==0]
+        frlist=[]
+        
+        # Look for FinalResult
+        sFor="finalresult"
+        if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
+            dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
+            frlist=StepsForCurSection.loc[dfb,"Step"].split(",")
+            self.__Log("\nFinal Result detected")
+            self.__Log(f'Final Result list to propagate their equivalente in CarryTo2042 : {frlist}')
+
+        # Look for CarryTo2042
+        sFor="carryto2042"
+        if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
+            dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
+            carrylist=StepsForCurSection.loc[dfb,"Step"].split(",")
+            self.__Log("\nCarry To 2042 detected")
+            self.__Log(f'Carry to 2042 list  : {carrylist}')
+            if not frlist:
+                self.__Log(f'But the Final Result List is empty',4)
+                result = False
+            else:
+                i = 0
+                for f in carrylist:
+                    resultf = f'F{CurForm}S0_{frlist[i]}'
+                    targetf =  f'F2042{f}'
+                    if resultf in self.FieldDict.keys():
+                        self.__Log(f'Loading {targetf} with value of {resultf} = {self.FieldDict[resultf]}')
+                        if targetf in self.FieldDict.keys():
+                            self.FieldDict[targetf]=self.FieldDict[targetf] + self.FieldDict[resultf]
+                        else:
+                            self.FieldDict[targetf]=self.FieldDict[resultf]
+                        self.__Log(f'New value for {targetf} : {self.FieldDict[resultf]}')
+                    i = i + 1
+
+                
+        self.__Log(f'\nEnd of ProcesSteps\n\n')
         return result
 
 #-----------------------------------------------------------------------------------------------------------------------
-# Public Method/function    
+# Public functions Helper    
 #-----------------------------------------------------------------------------------------------------------------------
     
 #  Function Dump
@@ -627,11 +720,11 @@ class Tax:
                 print (f'Steps :')
                 print (self.StepperDict)
 
-        if (topic.lower() == "all" or topic.lower() == "result"):
+        if (topic.lower() == "all" or topic.lower() == "report"):
             if self.bTaxCalculted:
                 print ("")
-                print (f'Results :')
-                print (self.ResultDict)
+                print (f'Report :')
+                print (self.ReportDict)
 
         if self.bProfileLoaded:
             print ("")
@@ -711,6 +804,26 @@ class Tax:
         self.__Log(f'End of AllocateDeficit returning reparlist = {repartlist}, updated amountlist {newamountlist}, remaining amount {remains}')
         return repartlist,newamountlist,remains
 
+#  Function SumSectionFields
+#
+#  Params:
+#         f : Form name
+#         s : section number
+#
+#  Description :
+#
+#  Return:
+#        sumf : Sum of fields in the section
+#
+    def SumSectionFields(self,f,s):
+        self.__Log(f'Beginning of SumSectionFields on section {s}')
+        
+        sname = f'F{f}S{s}'
+        lstf = [self.FieldDict[k] for k in list(self.FieldDict.keys()) if sname in k[:len(sname)]]
+        sumf = sum(lstf)
+
+        self.__Log(f'End of SumSectionFields returning Sum of Fields = {sumf}')
+        return sumf
 
 #  Function DisplayComputeLog
 #
@@ -729,8 +842,47 @@ class Tax:
         self.__Log("End of DisplayComputeLog")
         return
 
+#  Function ReportFieldsInSections
 #
-#  Function FinalTaxe
+#  Params:
+#         f : Form number
+#         s : Section to number (if none s=0 then all section in the forms are processed)
+#         display : If true (default) the fields and their value are printed
+#
+#  Description :
+#       
+#
+#  Return:
+#        fdict : dictionary of fields of the section/s
+#
+    def ReportFieldsInSections(self,f,s=None,display=True):
+        if s == None:
+            ends = ""
+        else:
+            ends = f' and section {s}'
+        self.__Log(f'Beginning of ReportFieldsInSections for forms {f}{ends}')
+
+        fdict = {}
+        if s == None:
+            for i in range(1,12):
+                fn = f'F{f}S{i}'
+                flds = self.__GetSectionFields(fn,fdict)
+                if len(flds) > 0:
+                    self.__Log(f'Section {i} : {flds}',2)
+        else:
+                fn = f'F{f}S{s}'
+                flds = self.__GetSectionFields(fn,fdict)
+                self.__Log(f'Section {s} : {flds}',2)
+        
+        self.__Log(f'End of ReportFieldsInSections {fdict}')
+        return fdict
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Public Method/function    
+#-----------------------------------------------------------------------------------------------------------------------
+
+#
+#  Function ComputeProgressiveTax
 #
 #  Params: Year
 #          Taxable Revenu
@@ -739,8 +891,8 @@ class Tax:
 #
 #  Return: Taxe amount
 #
-    def FinalTaxe(self, year=datetime.datetime.now().year,taxablerevenue=0,nbpart=1):
-        self.__Log(f'Beginning of FinalTaxe for year {year} and a Taxable revenue of {taxablerevenue}')
+    def ComputeProgressiveTax(self, year=datetime.datetime.now().year,taxablerevenue=0,nbpart=1):
+        self.__Log(f'Beginning of ComputeProgressiveTax for year {year} income of {taxablerevenue} and {nbpart} part')
 
         if self.bTaxDefLoaded == False: self.LoadTaxDef()
         if self.bTaxDefLoaded:
@@ -755,18 +907,18 @@ class Tax:
             while (Rev > 0):
                 for i,r in enumerate(RL):
                     a,b,c = r[f'R{i+1}']
-                    if a <= Rev <= b:
-                        irv = Rev - (a + 1)
+                    if a+1 < Rev <= b:
+                        irv = Rev - (a)
                         self.__Log(f'Applied range {i+1} at {c}% for {irv} Euro')
-                        TaxeAmount = TaxeAmount + irv*(c/100)
-                        self.__Log(f'Added {irv*(c/100)} to Amount')
+                        TaxeAmount = TaxeAmount + (irv*c/100)
+                        self.__Log(f'Added {irv*c/100} to Amount')
                         Rev = a
 
-            self.__Log(f'Final Taxe : {round(TaxeAmount,0)}')
+            taxablerevenue = int(round(TaxeAmount,0) * nbpart)
 
-            taxablerevenue = round(TaxeAmount,0) * nbpart
+            self.__Log(f'Final Taxe : {taxablerevenue}')
 
-        self.__Log(f'End of FinalTaxe')
+        self.__Log(f'End of ComputeProgressiveTax')
         return taxablerevenue
 
 
@@ -788,7 +940,14 @@ class Tax:
         if result:
             self.RawTaxProfile=content
             self.bProfileLoaded = True
+            self.__Log("Loading Profile ...",2)
             self.__FlatenTP()
+            # Ovrewrite Year and NBParts from the profile
+            if 'GV_Year' in self.VarDict.keys():
+                self.Year = self.VarDict['GV_Year']
+            if 'NbParts' in self.VarDict.keys():
+                self.NbPArts = self.VarDict['NbParts']
+            
 
         self.__Log(f'End of LoadProfile {profilefile}')
         return result
@@ -837,7 +996,7 @@ class Tax:
 #
 #  Params: None
 #
-#  Description : Process and yield Fields values for the Tax Calculation
+#  Description : Process and yield Fields values of each forms for further Tax Calculation
 #
 #  Return: True of False
 #
@@ -845,6 +1004,8 @@ class Tax:
         self.__Log("Beginning of ProcessForms")
 
         result = True
+
+        self.__Log(f'Start Processing Each Forms in order ... ',2)
         
         if self.bProfileLoaded:
             if self.bTaxDefLoaded == False: self.LoadTaxDef()
@@ -854,15 +1015,11 @@ class Tax:
                     for Form in ProcOrdList:
                         for ProForm in self.FormList:
                             if ProForm.lower() == Form.lower():
-                                self.__Log(f'Processing forms {Form} ... ',2)
+                                self.__Log(f'\nProcessing forms {Form} ... ',2)
                                 ExecSteps = self.__LoadStepsFor(Form)
-#Dbg - Remove after
-                                self.LogLevel = 1
                                 if not self.__ProcesSteps(ExecSteps,Form):
                                     result = False
                                     break
-#Dbg - Remove after
-                        self.LogLevel = 3
                         if not result:
                             break
                     if result:
@@ -872,6 +1029,141 @@ class Tax:
             result = False
 
         self.__Log("End of ProcessForms")
+        return result
+ 
+#
+#
+#  Function GetFielValue
+#
+#  Params: None
+#
+#  Description : Return a Field or Variable value by name
+#
+#  Return: True of False
+#
+    def GetFielValue(self,name):
+        self.__Log("Beginning of GetFielValue")
+        
+        if name in self.FieldDict.keys():
+            value = self.FieldDict[name]
+            self.__Log(f'Found Field {name} = {value}')
+        elif name in self.VarDict.keys():
+            value = self.FieldDict[name]
+            self.__Log(f'Found Variable {name} = {value}')
+        else:
+            value = 0
+
+        self.__Log("End of GetFielValue")
+        return value
+#
+#
+#  Function ComputeIR
+#
+#  Params: None
+#
+#  Description : Process and yield Fields values for the Tax Calculation
+#
+#  Return: True of False
+#
+    def ComputeIR(self):
+        self.__Log("Beginning of ComputeIR")
+
+        result = True
+
+        if self.bFormsProcessed:
+            
+#dg
+#            self.LogLevel = 1
+            #Calculate Taxable revenue
+            Incomes = self.GetFielValue("F2042S1_Salaires")
+            self.__Log(f'\n  Incomes = {Incomes}',2)
+            tenpercent = round(Incomes*0.1,0)
+            self.__Log(f'  10% déduction = {tenpercent}',2)
+            Incomes = int(Incomes - tenpercent)
+            self.__Log(f'  Taxable Incomes = {Incomes}',2)
+            
+            RevFoncImp = self.GetFielValue("F2042S4_BA")
+            RevImpGlo = self.GetFielValue("F2042S4_BC")
+
+            DeductibleGSC = self.GetFielValue("F2042S6_DE")
+            if DeductibleGSC > 0:
+                self.__Log(f'  Deductible CSG from previous year = {-DeductibleGSC}',2)
+            
+            BrutGlobalIncome = Incomes - RevImpGlo + RevFoncImp - DeductibleGSC
+            self.__Log(f'  Brut Global Incomes = {BrutGlobalIncome}',2)
+
+            if self.Year != None and self.NbParts != None:
+                IRThruProgGrid = self.ComputeProgressiveTax(self.Year,BrutGlobalIncome,self.NbParts)
+                self.__Log(f'  Tax before Reduction= {IRThruProgGrid}',2)
+
+            IRBeforeTaxR = IRThruProgGrid
+            InvLoc = self.GetFielValue("F2042S7_HV")
+
+            #Invest type Scelier
+            if InvLoc > 0:
+                ReductionInvLoc = int(InvLoc * 25 / 100)
+                self.__Log(f'  Tax Reduction from Investments = {ReductionInvLoc}',2)
+                IRBeforeTaxR = IRBeforeTaxR - ReductionInvLoc
+            
+            #Donation to Org 
+            OrgDon = self.GetFielValue("F2042S7_UD")
+            if OrgDon > 0:
+                self.__Log(f'  Donation to Help Org = {OrgDon}',2)
+                IRBeforeTaxR = IRBeforeTaxR - OrgDon
+
+            #Donation to General Interest Org
+            OrgGIDon = self.GetFielValue("F2042S7_UF")
+            if OrgGIDon > 0:
+                self.__Log(f'  Donation to Help Org = {OrgGIDon}',2)
+                IRBeforeTaxR = IRBeforeTaxR - OrgGIDon
+            
+            PropTax = int(round(self.SumSectionFields(2042,2) - self.GetFielValue("F2042S2_CK") -self.GetFielValue("F2047S2_F222")) * 28 / 100)
+            self.__Log(f'  Proportional Tax= {PropTax}',2)
+
+            IRBeforeTaxR = IRBeforeTaxR + PropTax            
+            self.__Log(f'  Tax before corrections = {IRBeforeTaxR}',2)
+
+            #Integrate Already Paid IR (since 2018)
+            AlreadyPaid = self.GetFielValue("F2042S8_HV")
+            if AlreadyPaid > 0:
+                self.__Log(f'  Donation to Help Org = {AlreadyPaid}',2)
+                IRBeforeTaxR = IRBeforeTaxR + AlreadyPaid
+            
+            TotalIRBeforeTaxR = IRBeforeTaxR
+            self.__Log(f'  Total Tax before Reduction = {TotalIRBeforeTaxR}',2)
+
+            NetIncome = TotalIRBeforeTaxR
+
+            #Home emploment
+            PrelAlredayTaken = self.GetFielValue("F2042S2_CK")
+            if PrelAlredayTaken > 0:
+                self.__Log(f'  Tax already paid on financial investment = {-PrelAlredayTaken}',2)
+                NetIncome = NetIncome - PrelAlredayTaken
+
+            #Home emploment
+            HEmp = self.GetFielValue("F2042S7_DB")
+            if HEmp > 0:
+                HEmp = int(round(HEmp/2))
+                self.__Log(f'  Home Employment reduction = {-HEmp}',2)
+                NetIncome = NetIncome - HEmp
+
+            #Only for 2018 ( White Year)
+            if self.Year == 2018:
+                self.__Log(f'  Tax Credit White Year = {-IRThruProgGrid}',2)
+                NetIncome = NetIncome - IRThruProgGrid
+
+            self.__Log(f'\n  Net Tax : {NetIncome}\n',2)
+            
+#dg
+#            self.LogLevel = 3
+            
+            if result:
+                self.bIRCalulated = True
+        else:
+            self.__Log("Error : Call ProcessForms or Calculate before this method",4)
+            result = False
+
+        self.__Log("End of ComputeIR")
         return result
 
 #
@@ -892,7 +1184,10 @@ class Tax:
         
         if self.bFormsProcessed == False: result = self.ProcessForms()
         if result:
-            self.__Log(f'Start Processing Tax Calculation ... ')
+            self.__Log(f'\n\nStart Processing Tax Calculation ... ',2)
+            result = self.ComputeIR()
+            if result:
+                self.__Log(f'Tax Calculation sucessful ',2)                
 
         if result:
             self.bTaxCalculted = True
