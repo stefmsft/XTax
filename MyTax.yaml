@@ -1,0 +1,15 @@
+Year: 2019
+NbParts: 2
+Forms:
+    - Form    : "2042"
+      Sections:
+          - Section : 1
+            HouseholdNames: "Du Glandier"
+            Fields:
+              - AJ_Stephane: 66666
+          - Section : 2
+          - Section : 3
+          - Section : 4
+          - Section : 6
+          - Section : 7
+          - Section : 8

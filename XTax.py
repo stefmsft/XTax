@@ -21,7 +21,7 @@ import os
 import datetime
 
 class Tax:
-    """Classs representing a spécific year of Tax"""    
+    """Class representing a spécific year of Tax"""    
 
     #
 #  Function __init__
@@ -39,6 +39,7 @@ class Tax:
         self.__Reset()
         self.LogLevel = loglevel
         self.Year = year
+        
         if autoload:
             fname = ".\\{}.yaml".format(year)
             if os.path.isfile(fname):
@@ -70,7 +71,7 @@ class Tax:
         self.bFormsProcessed = False
         self.bTaxCalculted = False
         self.bIRCalulated = False
-        self.LogLevel = 3
+        self.LogLevel = 2
         self.RawTaxProfile = None
         self.RawTaxDef = None
         self.FormList = []
@@ -418,9 +419,8 @@ class Tax:
                     self.__Log(f'Loop On : {self.VarDict[currentloopext]}')
                     currentloopvl = self.VarDict[currentloopext].split(",")
                 else:
-                    self.__Log(f'Error : Loop On Variable "{currentloopext}" not defined',4)
-                    result = False
-                    break
+                    self.__Log(f'Warning : Loop On Variable "{currentloopext}" not defined',2)
+                    currentloopext = ""
                 
             # Look for reqfields
             sFor="reqfields"
@@ -580,9 +580,6 @@ class Tax:
                                     self.__Log(f'New value of self.FieldDict["{k}"] = {self.FieldDict[k]}')
                             self.ReportDict[updf]=self.FieldDict[k]
 
-#dbg
-#            self.LogLevel = 1
-
             # Look for Agregate
             sFor="agregate"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
@@ -612,10 +609,7 @@ class Tax:
                     
                     self.__Log(f'Loading self.FieldDict[{lookupf}] with {aggval}')
                     self.FieldDict[lookupf]=aggval
-                    
-#dbg
-#            self.LogLevel = 3
-                
+               
             # Look for Save
             sFor="save"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
@@ -945,8 +939,8 @@ class Tax:
             # Ovrewrite Year and NBParts from the profile
             if 'GV_Year' in self.VarDict.keys():
                 self.Year = self.VarDict['GV_Year']
-            if 'NbParts' in self.VarDict.keys():
-                self.NbPArts = self.VarDict['NbParts']
+            if 'GV_NbParts' in self.VarDict.keys():
+                self.NbParts = self.VarDict['GV_NbParts']
             
 
         self.__Log(f'End of LoadProfile {profilefile}')
@@ -961,7 +955,7 @@ class Tax:
 #
 #  Return: True of False
 #
-    def LoadTaxDef(self, taxedeffile=".\\TaxDefinition.yaml"):
+    def LoadTaxDef(self, taxedeffile="TaxDefinition.yaml"):
         self.__Log("Beginning of LoadTaxDef")
         result = False
         
@@ -1071,9 +1065,7 @@ class Tax:
         result = True
 
         if self.bFormsProcessed:
-            
-#dg
-#            self.LogLevel = 1
+
             #Calculate Taxable revenue
             Incomes = self.GetFielValue("F2042S1_Salaires")
             self.__Log(f'\n  Incomes = {Incomes}',2)
@@ -1210,21 +1202,6 @@ class Tax:
         result = False
         self.__Log("End of Report")
         return result
-
-#  Function 
-#
-#  Params:
-#
-#  Description :
-#
-#  Return:
-#
-    def Squel(self):
-        self.__Log("Beginning of ")
-        self.__Log("End of ")
-        return
-
-
 
 # -
 
