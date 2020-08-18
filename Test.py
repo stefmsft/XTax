@@ -403,6 +403,10 @@ print ("Case7J =",Case7J)
 Relicat = 0
 F12 = -Relicat
 
-Relicat
+F630 = -1
+eval ('F630 < 0')
+
+a = round(327 * 12.8 / 100)
+a
 
 

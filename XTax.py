@@ -33,7 +33,7 @@ class Tax:
 #
 #  Return: Nothing
 #
-    def __init__(self, year=2010, loglevel=2,autoload=True):
+    def __init__(self, year=2010, loglevel=3,autoload=True):
         self.LogLevel = loglevel
         self.__Log("Beginning of Init")
         self.__Reset()
@@ -71,9 +71,12 @@ class Tax:
         self.bFormsProcessed = False
         self.bTaxCalculted = False
         self.bIRCalulated = False
-        self.LogLevel = 2
+        self.LogLevel = 3
         self.RawTaxProfile = None
         self.RawTaxDef = None
+        self.NetTax = 0
+        self.SoldeImpot = 0
+        self.RevFiscalRef = 0
         self.FormList = []
         self.VarDict = {}
         self.FieldDict = {}
@@ -389,6 +392,8 @@ class Tax:
             currentloopext=""
             currentloopvl=[]
             curcompute=[]
+            WeDoCompute=True
+            ConditionDetected=False
             
             currentfieldnamecontext = f"F{CurForm}S{cursection}"
             self.__Log(f"Current Field Prefix {currentfieldnamecontext}")
@@ -407,7 +412,7 @@ class Tax:
                 if r == False:
                     self.__Log(f'Error : While cleaning variable {v}',4)
             self.Local2Del.clear()
-            
+                
             # Look for loopon
             sFor="loopon"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
@@ -416,12 +421,12 @@ class Tax:
                 self.__Log("\nLoop on detected")
                 currentloopext = f'{currentfieldnamecontext}_{currentloopext}'
                 if currentloopext in self.VarDict.keys():
-                    self.__Log(f'Loop On : {self.VarDict[currentloopext]}')
+                    self.__Log(f'Loop On : {self.VarDict[currentloopext]}',2)
                     currentloopvl = self.VarDict[currentloopext].split(",")
                 else:
                     self.__Log(f'Warning : Loop On Variable "{currentloopext}" not defined',2)
                     currentloopext = ""
-                
+                    
             # Look for reqfields
             sFor="reqfields"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
@@ -458,6 +463,14 @@ class Tax:
                         else:
                             self.__Log(f'    found with value {self.FieldDict[i]}')
                     
+            # Look for Condition
+            sFor="condition"
+            if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
+                dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
+                Condition=StepsForCurSection.loc[dfb,"Step"].split(",")[0]
+                self.__Log("\nCondition detected")
+                self.__Log(f'Condition found to continue process section {cursection} : {Condition}',2)
+                ConditionDetected=True
                                                             
             #Look for repportfields
             sFor="repportfields"
@@ -503,7 +516,7 @@ class Tax:
                     self.Local2Del.clear()
 
                     # Propagate localy the Fields of the section
-                    self.__Log("\nField propagation in Locals")
+                    self.__Log("\nField propagation in Locals",2)
                     for k in self.FieldDict.keys():
                         if k.startswith(f'{currentfieldnamecontext}'):
                             if lctxt == "*" or lctxt == k.split('_')[2]:
@@ -515,7 +528,7 @@ class Tax:
                                 r = self.__ExecStr(execstring)
                                 if lf in globals().keys() and r != False:
                                     self.__Log(f'Variable {lf} successfully created')
-                                    self.__Log(f'{lf} = {globals()[lf]}')
+                                    self.__Log(f'{lf} = {globals()[lf]}',2)
                                 else:
                                     self.__Log(f'Error : While emitting "{lf}"',4)
                                     result = False
@@ -532,23 +545,33 @@ class Tax:
                             r = self.__ExecStr(execstring)
                             if lf in globals().keys() and r != False:
                                 self.__Log(f'Variable {lf} successfully created')
-                                self.__Log(f'{lf} = {globals()[lf]}')
+                                self.__Log(f'{lf} = {globals()[lf]}',2)
                             else:
                                 self.__Log(f'Error : While emitting "{lf}"',4)
                                 result = False
-                                break                            
+                                break   
+                                
+                    if ConditionDetected:
+                        try:
+                            WeDoCompute = eval (Condition)
+                        except Exception as e:
+                            pass
 
-                    # Compute
-                    self.__Log("\nCompute")
-                    for c in curcompute:
-                        self.__Log(f'Processing {c}')
-                        r = self.__ExecStr(c)
-                        if r != True:
-                            result = False
-                            break
+                    if WeDoCompute:
+                        # Compute
+                        self.__Log('',2)
+                        self.__Log("\nCompute")
+                        for c in curcompute:
+                            self.__Log(f'Processing {c}',2)
+                            r = self.__ExecStr(c)
+                            if r != True:
+                                result = False
+                                break
+
                     # Propagate back to dictionary
                     self.__Log("\nField back propagation to dictionary")
                     self.__Log("For fields in profile")
+                    self.__Log('',2)
                     for f in self.Local2Del:
                         if lctxt == "*":
                             updf = f'{currentfieldnamecontext}_{f}'
@@ -582,7 +605,7 @@ class Tax:
 
             # Look for Agregate
             sFor="agregate"
-            if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty:
+            if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty and WeDoCompute:
                 dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
                 agglist=StepsForCurSection.loc[dfb,"Step"].split(",")
                 self.__Log("\nAgregate detected")
@@ -607,7 +630,7 @@ class Tax:
                     for fc in f2clean:
                         del self.FieldDict[fc]
                     
-                    self.__Log(f'Loading self.FieldDict[{lookupf}] with {aggval}')
+                    self.__Log(f'Loading self.FieldDict[{lookupf}] with {aggval}',2)
                     self.FieldDict[lookupf]=aggval
                
             # Look for Save
@@ -622,8 +645,11 @@ class Tax:
                     sectionf = f'{currentfieldnamecontext}_{f}'
                     targetf =  f'F{CurForm}S0_{f}'
                     if sectionf in self.FieldDict.keys():
-                        self.__Log(f'Loading {targetf} with value of {sectionf} = {self.FieldDict[sectionf]}')
+                        self.__Log(f'Loading {targetf} with value of {sectionf} = {self.FieldDict[sectionf]}',2)
                         self.FieldDict[targetf]=self.FieldDict[sectionf]
+                    else:
+                        self.__Log(f'Creating {targetf} loaded with {sectionf} = 0',2)
+                        self.FieldDict[targetf]=0
             
                 
         # At the End ( After looping on each section) 
@@ -1027,7 +1053,7 @@ class Tax:
  
 #
 #
-#  Function GetFielValue
+#  Function GetFieldValue
 #
 #  Params: None
 #
@@ -1035,20 +1061,21 @@ class Tax:
 #
 #  Return: True of False
 #
-    def GetFielValue(self,name):
-        self.__Log("Beginning of GetFielValue")
+    def GetFieldValue(self,name):
+        self.__Log("Beginning of GetFieldValue")
         
         if name in self.FieldDict.keys():
             value = self.FieldDict[name]
             self.__Log(f'Found Field {name} = {value}')
         elif name in self.VarDict.keys():
-            value = self.FieldDict[name]
+            value = self.VarDict[name]
             self.__Log(f'Found Variable {name} = {value}')
         else:
             value = 0
 
-        self.__Log("End of GetFielValue")
+        self.__Log("End of GetFieldValue")
         return value
+
 #
 #
 #  Function ComputeIR
@@ -1059,102 +1086,183 @@ class Tax:
 #
 #  Return: True of False
 #
-    def ComputeIR(self):
-        self.__Log("Beginning of ComputeIR")
+    def ComputeIR(self,silent=False):
+        self.__Log(f'Beginning of ComputeIR with Silent = {silent}')
 
         result = True
+        cll = self.LogLevel
+        if silent == True:
+            self.LogLevel = 4
 
         if self.bFormsProcessed:
 
             #Calculate Taxable revenue
-            Incomes = self.GetFielValue("F2042S1_Salaires")
-            self.__Log(f'\n  Incomes = {Incomes}',2)
+            self.__Log('\n  IMPOT SUR LE REVENU',3)
+            self.__Log('  Détail des revenus',3)
+            Incomes = self.GetFieldValue("F2042S1_Salaires")
+            self.__Log(f'  Salaires = {Incomes}',3)
             tenpercent = round(Incomes*0.1,0)
-            self.__Log(f'  10% déduction = {tenpercent}',2)
+            self.__Log(f'  10% déduction = {-int(tenpercent)}',3)
             Incomes = int(Incomes - tenpercent)
-            self.__Log(f'  Taxable Incomes = {Incomes}',2)
+            self.__Log(f'  Salaires, Pensions, rentes nets = {Incomes}',3)
             
-            RevFoncImp = self.GetFielValue("F2042S4_BA")
-            RevImpGlo = self.GetFielValue("F2042S4_BC")
+            self.__Log('\n  Revenus perçu par le foyer fiscal',3)
+            RevFoncImp = self.GetFieldValue("F2042S4_BA")
+            DefGlo = self.GetFieldValue("F2042S4_BC")
+            if RevFoncImp > 0:
+                self.__Log(f'  Revenus foncier nets = {RevFoncImp}',3)
+            else:
+                self.__Log(f'  Revenus foncier nets = {-DefGlo}',3)
 
-            DeductibleGSC = self.GetFielValue("F2042S6_DE")
-            if DeductibleGSC > 0:
-                self.__Log(f'  Deductible CSG from previous year = {-DeductibleGSC}',2)
+            BrutGlobalIncome = Incomes - DefGlo + RevFoncImp
+            self.__Log(f'\n  Revenus brut global = {BrutGlobalIncome}',3)
             
-            BrutGlobalIncome = Incomes - RevImpGlo + RevFoncImp - DeductibleGSC
-            self.__Log(f'  Brut Global Incomes = {BrutGlobalIncome}',2)
+            DeductibleGSC = self.GetFieldValue("F2042S6_DE")
+            self.__Log(f'  CSG Deductible = {-DeductibleGSC}',3)
+            
+            GlobalIncome = BrutGlobalIncome - DeductibleGSC
+            self.__Log(f'\n  Revenu Imposable = {GlobalIncome}',3)
+
+            #Still to validate
+            RevTauxForfaitaire = int(round(self.SumSectionFields(2042,2) - self.GetFieldValue("F2042S2_CK") - self.GetFieldValue("F2042S2_TR") - self.GetFieldValue("F2047S2_F222") - self.GetFieldValue("F2042S2_BH") + self.GetFieldValue("F2042S3_VG")))
+            self.__Log(f'\n  Revenus au taux forfaitaire 12,8% = {RevTauxForfaitaire}',3)
 
             if self.Year != None and self.NbParts != None:
-                IRThruProgGrid = self.ComputeProgressiveTax(self.Year,BrutGlobalIncome,self.NbParts)
-                self.__Log(f'  Tax before Reduction= {IRThruProgGrid}',2)
+                IRThruProgGrid = self.ComputeProgressiveTax(self.Year,GlobalIncome,self.NbParts)
+                self.__Log(f'\n  Impot sur les revenus sousmis au barème = {IRThruProgGrid}',3)
 
             IRBeforeTaxR = IRThruProgGrid
-            InvLoc = self.GetFielValue("F2042S7_HV")
+            self.__Log(f'\n  Impôt avant réduction d impôt = {IRBeforeTaxR}',3)
 
             #Invest type Scelier
-            if InvLoc > 0:
-                ReductionInvLoc = int(InvLoc * 25 / 100)
-                self.__Log(f'  Tax Reduction from Investments = {ReductionInvLoc}',2)
+            # Adapt for other investment ...
+            self.__Log('\n  REDUCTIONS D IMPOT\n',3)
+            InvLoc1 = self.GetFieldValue("F2042S7_HV")
+            InvLoc2 = self.GetFieldValue("F2042S7_ZB")
+            if InvLoc1 > 0:
+                ReductionInvLoc = int(InvLoc1 * 25 / 100)
+                LibelInvLoc = "Investissement Locatif Scellier achevé en 2010"
+            elif InvLoc2 > 0:
+                # Formula to be retreive
+                ReductionInvLoc = int(InvLoc2 * 2 /100)
+                LibelInvLoc = "Scellier, prorogation de l'engagement"
+                                
+            if ReductionInvLoc > 0:
+                self.__Log(f'  {LibelInvLoc} = {ReductionInvLoc}',3)
                 IRBeforeTaxR = IRBeforeTaxR - ReductionInvLoc
             
             #Donation to Org 
-            OrgDon = self.GetFielValue("F2042S7_UD")
+            OrgDon = self.GetFieldValue("F2042S7_UD")
             if OrgDon > 0:
-                self.__Log(f'  Donation to Help Org = {OrgDon}',2)
-                IRBeforeTaxR = IRBeforeTaxR - OrgDon
+                self.__Log(f'  Dons Personnes en difficulté = {OrgDon}',3)
+                IRBeforeTaxR = IRBeforeTaxR - int(OrgDon*75/100)
 
             #Donation to General Interest Org
-            OrgGIDon = self.GetFielValue("F2042S7_UF")
+            OrgGIDon = self.GetFieldValue("F2042S7_UF")
             if OrgGIDon > 0:
-                self.__Log(f'  Donation to Help Org = {OrgGIDon}',2)
-                IRBeforeTaxR = IRBeforeTaxR - OrgGIDon
+                self.__Log(f'  Dons organisation humanitaires = {OrgGIDon}',3)
+                IRBeforeTaxR = IRBeforeTaxR - int(OrgGIDon*66/100)
             
-            PropTax = int(round(self.SumSectionFields(2042,2) - self.GetFielValue("F2042S2_CK") -self.GetFielValue("F2047S2_F222")) * 28 / 100)
-            self.__Log(f'  Proportional Tax= {PropTax}',2)
+            self.__Log(f'  Total des réduction d\'impôt = {IRBeforeTaxR-IRThruProgGrid}',3)
 
-            IRBeforeTaxR = IRBeforeTaxR + PropTax            
-            self.__Log(f'  Tax before corrections = {IRBeforeTaxR}',2)
+            PropTax = round(RevTauxForfaitaire * 12.8 / 100)
+            self.__Log(f'  Impôt proportionel = {PropTax}',3)
 
-            #Integrate Already Paid IR (since 2018)
-            AlreadyPaid = self.GetFielValue("F2042S8_HV")
-            if AlreadyPaid > 0:
-                self.__Log(f'  Donation to Help Org = {AlreadyPaid}',2)
-                IRBeforeTaxR = IRBeforeTaxR + AlreadyPaid
+            IRBeforeTaxR = IRBeforeTaxR + PropTax
             
-            TotalIRBeforeTaxR = IRBeforeTaxR
-            self.__Log(f'  Total Tax before Reduction = {TotalIRBeforeTaxR}',2)
+            if self.Year == 2018:
+                rals = self.GetFieldValue("F2042S8_HV")
+                self.__Log(f'  Reprise de l\'avance perçue sur réductions et crédits d\'impôt = {rals}',3)
+                IRBeforeTaxR = IRBeforeTaxR + rals
 
-            NetIncome = TotalIRBeforeTaxR
+            self.__Log(f'  Impot total avant crédits d\'impôts = {IRBeforeTaxR}',3)
+            
+            self.__Log('\n  CREDIT D\'IMPOT,IMPUTATION\n',3)
+            
+            NetTax = IRBeforeTaxR
 
-            #Home emploment
-            PrelAlredayTaken = self.GetFielValue("F2042S2_CK")
+            #Tax Already paid outside
+            PrelAlredayTaken = self.GetFieldValue("F2047S2_F207")
             if PrelAlredayTaken > 0:
-                self.__Log(f'  Tax already paid on financial investment = {-PrelAlredayTaken}',2)
-                NetIncome = NetIncome - PrelAlredayTaken
+                self.__Log(f'  Impot payé à l\'étranger = {-PrelAlredayTaken}',3)
+                NetTax = NetTax - PrelAlredayTaken
+
+            #Tax Already paid outside
+            PrelForfait = self.GetFieldValue("F2042S2_CK")
+            if PrelForfait > 0:
+                self.__Log(f'  Prelevement Forfaitaire déjà versé = {-PrelForfait}',3)
+                NetTax = NetTax - PrelForfait
 
             #Home emploment
-            HEmp = self.GetFielValue("F2042S7_DB")
+            HEmp = self.GetFieldValue("F2042S7_DB")
             if HEmp > 0:
                 HEmp = int(round(HEmp/2))
-                self.__Log(f'  Home Employment reduction = {-HEmp}',2)
-                NetIncome = NetIncome - HEmp
+                self.__Log(f'  Emploi salarié à domicile = {-HEmp}',3)
+                NetTax = NetTax - HEmp
 
             #Only for 2018 ( White Year)
             if self.Year == 2018:
-                self.__Log(f'  Tax Credit White Year = {-IRThruProgGrid}',2)
-                NetIncome = NetIncome - IRThruProgGrid
+                self.__Log(f'  Credit Impot Modernisation du recouvrement = {-IRThruProgGrid}',3)
+                NetTax = NetTax - IRThruProgGrid
+            
+            self.__Log('\n  IMPOT NET\n',3)
+            self.__Log(f'  Total de l\'impot sur le revenu net et reprise eventuelles : {NetTax}\n',3)
+            
+            self.NetTax = NetTax
 
-            self.__Log(f'\n  Net Tax : {NetIncome}\n',2)
-            
-#dg
-#            self.LogLevel = 3
-            
+            #Calcul prelevements sociaux
+            self.__Log('\n  ------------------------------------',3)
+            self.__Log('  PRELEVEMENTS SOCIAUX\n',3)
+            self.__Log('\n  Détail des revenus (CSG - CRDS) /  (PREL SOL)',3)
+            cm = self.GetFieldValue("F2047S2_F222")
+            gd = self.GetFieldValue("F2042S3_VG")
+            self.__Log(f'  Revenus de capitaux mobilers : ( {cm} ) / ( {cm} )',3)
+            self.__Log(f'  Plus-values et gains divers : ( {gd} ) / ( {gd} )\n',3)
+            bi = cm + gd
+            self.__Log(f'  BASE IMPOSABLE : ( {bi} ) / ( {bi} )',3)
+            micsg = round(bi * 9.70 / 100)
+            mips = round(bi * 7.50 / 100)
+            self.__Log(f'  Taux de l\'imposition : ( 9,70% ) / ( 7,50% )',3)
+            self.__Log(f'  Montant de l\'imposition : ( {micsg} ) / ( {mips} )\n',3)
+            tpsn = micsg + mips
+            self.__Log(f'  Total des prélévements sociaux nets : {tpsn}',3)
+
+            self.SoldeImpot = 0
+            if self.Year > 2018:
+                rals = self.GetFieldValue("F2042S8_HV")
+                if rals == 0:
+                    self.__Log('  You didn\'t provide the 8HV Field in your profile. Remaining Tax to pay can\'t be calculated',3)
+                else:
+                    #Calcul Solde Impot
+                    self.__Log('\n  ------------------------------------',3)
+                    self.__Log(f'  CALCUL DU SOLDE DE VOTRE IMPOT POUR {self.Year}\n',3)
+                    self.__Log('\n  IMPOT SUR LE REVENU',3)
+                    self.__Log(f'\n  Impôt sur le revenu {self.Year} dû : {NetTax}',3)        
+                    self.__Log(f'  Retenue à la source prélévée en {self.Year} par vos verseurs de revenus : {-rals}',3)
+                    self.__Log(f'  Avance perçue sur les reductions et crédits d\'impôts : {self.GetFieldValue("F2042S7_AvanceReduc")}',3)
+                    self.SoldeImpot = NetTax - rals + int(self.GetFieldValue("F2042S7_AvanceReduc"))
+                    self.__Log(f'\n  Solde d\'impôt sur les revenus {self.Year}  : {self.SoldeImpot}\n',3)
+            elif self.Year == 2018:
+                self.SoldeImpot = NetTax
+                
+            if self.SoldeImpot > 0:
+                self.__Log(f'\n  TOTAL DE VOTRE IMPOSITION NETTE RESTANT A PAYER : {self.SoldeImpot}',3)
+            elif self.SoldeImpot < 0:
+                self.__Log(f'\n  COMPTE TENU DES ELEMENTS QUE VOUS AVEZ DECLARES, LE MONTANT QUI VOUS SERA REMBOURSE EST DE : {self.SoldeImpot}',3)
+                               
+            #Information complementaires
+            self.__Log('\n  ------------------------------------',3)
+            self.__Log('  INFORMATIONS COMPLEMENTAIRES',3)
+            self.RevFiscalRef = GlobalIncome + RevTauxForfaitaire
+            self.__Log(f'  Revenu fiscal de référence : {self.RevFiscalRef}\n',3)
+
             if result:
                 self.bIRCalulated = True
         else:
             self.__Log("Error : Call ProcessForms or Calculate before this method",4)
             result = False
 
+        self.LogLevel = cll
         self.__Log("End of ComputeIR")
         return result
 
@@ -1168,8 +1276,8 @@ class Tax:
 #
 #  Return: True of False
 #
-    def Calculate(self):
-        self.__Log("Beginning of Calculate")
+    def Calculate(self,silent=False):
+        self.__Log(f'Beginning of Calculate with silent = {silent}')
 
         result = True
         self.ResultDict={}
@@ -1177,7 +1285,7 @@ class Tax:
         if self.bFormsProcessed == False: result = self.ProcessForms()
         if result:
             self.__Log(f'\n\nStart Processing Tax Calculation ... ',2)
-            result = self.ComputeIR()
+            result = self.ComputeIR(silent=silent)
             if result:
                 self.__Log(f'Tax Calculation sucessful ',2)                
 
