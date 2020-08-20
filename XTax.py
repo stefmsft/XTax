@@ -21,7 +21,7 @@ import yaml
 import pandas as pd
 import os
 import datetime
-
+import inspect
 class Tax:
     """Class representing a spécific year of Tax"""    
 
@@ -35,16 +35,49 @@ class Tax:
 #
 #  Return: Nothing
 #
-    def __init__(self, year=2010, loglevel=3,autoload=True):
+    def __init__(self, year=2010, loglevel=3, autoload=True, user=""):
         self.LogLevel = loglevel
         self.__Log("Beginning of Init")
         self.__Reset()
         self.LogLevel = loglevel
         self.Year = year
-        
-        if autoload:
-            fname = ".\\{}.yaml".format(year)
+
+        #Search for the TaxDefinition file
+        found = False        
+        fname = f'{self.classAbsDir}\\TaxDefinition.yaml'
+        if os.path.isfile(fname):
+            found = True
+            self.Taxedeffile = fname
+        else:
+            fname = f'{self.classAbsDir}\\Profiles\\TaxDefinition.yaml'
             if os.path.isfile(fname):
+                found = True
+                self.Taxedeffile = fname
+        if not found:
+            ExceptError = "ERROR No tax definition file available - Read the documentation to continue"
+            self.__Log(ExceptError)
+            raise ValueError(ExceptError)
+
+        found = False        
+        #Search for a potential profile to autoload
+        if autoload:
+            fname = f'{self.classAbsDir}\\{year}.yaml'
+            if os.path.isfile(fname):
+                found = True
+            else:
+                fname = f'{self.classAbsDir}\\Profiles\\{year}.yaml'
+                if os.path.isfile(fname):
+                    found = True
+            if not found and user != "":
+                #Check path with user
+                fname = f'{self.classAbsDir}\\{user}-{year}.yaml'
+                if os.path.isfile(fname):
+                    found = True
+                else:
+                    fname = f'{self.classAbsDir}\\Profiles\\{user}\\{year}.yaml'
+                    if os.path.isfile(fname):
+                        found = True
+            if found:
                 self.__Log("Automatic load of {}".format(fname))
                 self.LoadProfile(fname)
                 Profile_Name=fname
@@ -81,6 +114,8 @@ class Tax:
         self.RevFiscalRef = 0
         self.DeficitFoncierAnterieur = 0
         self.TauxPrelevementSource = 0
+        self.Taxedeffile = ""
+        self.classAbsDir = os.path.abspath(os.path.join(inspect.getfile(self.__class__), os.pardir))
         self.ListDeficit = []
         self.FormList = []
         self.VarDict = {}
@@ -986,15 +1021,16 @@ class Tax:
 #
 #  Return: True of False
 #
-    def LoadTaxDef(self, taxedeffile="TaxDefinition.yaml"):
+    def LoadTaxDef(self):
         self.__Log("Beginning of LoadTaxDef")
         result = False
         
-        (result,content) = self.__LoadYaml(taxedeffile)
-        if result:
-            self.RawTaxDef=content
-            self.bTaxDefLoaded = True
-            self.__FlatenTD()
+        if self.Taxedeffile != "":
+            (result,content) = self.__LoadYaml(self.Taxedeffile)
+            if result:
+                self.RawTaxDef=content
+                self.bTaxDefLoaded = True
+                self.__FlatenTD()
        
         self.__Log("End of LoadTaxDef")
         return result
