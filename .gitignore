@@ -129,11 +129,9 @@ dmypy.json
 .pyre/
 
 # Custom
-2019.*
-2018.*
 *.xlsx
 *.pdf
 .vscode
 TaxCalculation.*
-Test.ipynb
-XTaxProto.*
+Scratch/*
+Profiles/*

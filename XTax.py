@@ -14,6 +14,8 @@
 #     name: python38032bit6948bcf2bd1d495c8d3b7cfa49a7d542
 # ---
 
+
+
 # +
 import yaml
 import pandas as pd
@@ -77,6 +79,9 @@ class Tax:
         self.NetTax = 0
         self.SoldeImpot = 0
         self.RevFiscalRef = 0
+        self.DeficitFoncierAnterieur = 0
+        self.TauxPrelevementSource = 0
+        self.ListDeficit = []
         self.FormList = []
         self.VarDict = {}
         self.FieldDict = {}
@@ -1055,11 +1060,11 @@ class Tax:
 #
 #  Function GetFieldValue
 #
-#  Params: None
+#  Params: Name
 #
 #  Description : Return a Field or Variable value by name
 #
-#  Return: True of False
+#  Return: Value of the Field or Variable
 #
     def GetFieldValue(self,name):
         self.__Log("Beginning of GetFieldValue")
@@ -1075,6 +1080,45 @@ class Tax:
 
         self.__Log("End of GetFieldValue")
         return value
+
+#
+#
+#  Function Decote
+#
+#  Params: Tax
+#
+#  Description : Calculate the "Decote" from the TaxFromPropGrid
+#
+#  Return: Decote value
+#
+    def Decote(self,tax):
+        self.__Log(f'Beginning of Decote for {tax}')
+        
+        decote = 0
+        founddecoteinfo = False
+
+        Grids = self.RawTaxDef["Tax"]["DecoteGrids"]
+        for g in Grids:
+            if g["Grid"] == self.Year:
+                founddecoteinfo = True
+                Floors = g["Floors"]
+                Forfait = g["Forfait"]
+                Percent = g["Percent"]
+
+        if self.NbParts == 1:
+            category = "Celib"
+        else:
+            category = "Couple"
+
+        if founddecoteinfo:
+            #Check if decote applicable
+            floor = Floors[category]
+            if tax <= floor:
+                forfait = Forfait[category]
+                decote = forfait - (tax * Percent / 100)             
+            
+        self.__Log(f'End of Decote return {decote}')
+        return decote
 
 #
 #
@@ -1099,7 +1143,12 @@ class Tax:
             #Calculate Taxable revenue
             self.__Log('\n  IMPOT SUR LE REVENU',3)
             self.__Log('  Détail des revenus',3)
+            Salary = self.GetFieldValue("F2042S1_AJ")
             Incomes = self.GetFieldValue("F2042S1_Salaires")
+            self.__Log(f'  Salaires = {Incomes}',3)
+            if Salary != Incomes:
+                OtherIncome = Incomes - Salary
+                self.__Log(f'  Autres revenus imposables = {OtherIncome}',3)
             self.__Log(f'  Salaires = {Incomes}',3)
             tenpercent = round(Incomes*0.1,0)
             self.__Log(f'  10% déduction = {-int(tenpercent)}',3)
@@ -1124,7 +1173,7 @@ class Tax:
             self.__Log(f'\n  Revenu Imposable = {GlobalIncome}',3)
 
             #Still to validate
-            RevTauxForfaitaire = int(round(self.SumSectionFields(2042,2) - self.GetFieldValue("F2042S2_CK") - self.GetFieldValue("F2042S2_TR") - self.GetFieldValue("F2047S2_F222") - self.GetFieldValue("F2042S2_BH") + self.GetFieldValue("F2042S3_VG")))
+            RevTauxForfaitaire = int(round(self.SumSectionFields(2042,2) - self.GetFieldValue("F2042S2_CK") - self.GetFieldValue("F2042S2_BH") + self.GetFieldValue("F2042S3_VG")))
             self.__Log(f'\n  Revenus au taux forfaitaire 12,8% = {RevTauxForfaitaire}',3)
 
             if self.Year != None and self.NbParts != None:
@@ -1133,12 +1182,38 @@ class Tax:
 
             IRBeforeTaxR = IRThruProgGrid
             self.__Log(f'\n  Impôt avant réduction d impôt = {IRBeforeTaxR}',3)
+            
+            self.__Log('\n  REDUCTIONS D IMPOT\n',3)
+            #Get eventually a decote
+            decote = round(self.Decote(IRBeforeTaxR))
+            if decote > 0:
+                self.__Log(f'  Décote = {decote}',3)
+                IRBeforeTaxR = IRBeforeTaxR - decote
+            
+            #Check for extra reduction
+            if self.Year > 2016 and self.Year < 2020:
+                if GlobalIncome < 19175:
+                    ri = 0.2 * IRBeforeTaxR
+                    IRBeforeTaxR = round(IRBeforeTaxR - ri)
+                    self.__Log(f'  Réduction sous condition de revenu (20%) = {ri}',3)
+                elif GlobalIncome < 21247:
+                    if self.NbParts == 1:
+                        part = 1
+                        demip = 0
+                    else:
+                        part = 2
+                        demip = (self.NbParts -2) / 2
+                    rp = 0.2 * (((21247*part + 3835*demip) - GlobalIncome)/2072)
+                    ri =  round(rp * IRBeforeTaxR)
+                    IRBeforeTaxR = IRBeforeTaxR - ri                    
+                    self.__Log(f'  Réduction sous condition de revenu ({round(rp*100)}%) = {ri}',3)
 
             #Invest type Scelier
             # Adapt for other investment ...
-            self.__Log('\n  REDUCTIONS D IMPOT\n',3)
             InvLoc1 = self.GetFieldValue("F2042S7_HV")
             InvLoc2 = self.GetFieldValue("F2042S7_ZB")
+            ReductionInvLoc = 0
+            
             if InvLoc1 > 0:
                 ReductionInvLoc = int(InvLoc1 * 25 / 100)
                 LibelInvLoc = "Investissement Locatif Scellier achevé en 2010"
@@ -1211,21 +1286,24 @@ class Tax:
             self.NetTax = NetTax
 
             #Calcul prelevements sociaux
-            self.__Log('\n  ------------------------------------',3)
-            self.__Log('  PRELEVEMENTS SOCIAUX\n',3)
-            self.__Log('\n  Détail des revenus (CSG - CRDS) /  (PREL SOL)',3)
             cm = self.GetFieldValue("F2047S2_F222")
             gd = self.GetFieldValue("F2042S3_VG")
-            self.__Log(f'  Revenus de capitaux mobilers : ( {cm} ) / ( {cm} )',3)
-            self.__Log(f'  Plus-values et gains divers : ( {gd} ) / ( {gd} )\n',3)
-            bi = cm + gd
-            self.__Log(f'  BASE IMPOSABLE : ( {bi} ) / ( {bi} )',3)
-            micsg = round(bi * 9.70 / 100)
-            mips = round(bi * 7.50 / 100)
-            self.__Log(f'  Taux de l\'imposition : ( 9,70% ) / ( 7,50% )',3)
-            self.__Log(f'  Montant de l\'imposition : ( {micsg} ) / ( {mips} )\n',3)
-            tpsn = micsg + mips
-            self.__Log(f'  Total des prélévements sociaux nets : {tpsn}',3)
+            if cm != 0 and gd != 0:
+                self.__Log('\n  ------------------------------------',3)
+                self.__Log('  PRELEVEMENTS SOCIAUX\n',3)
+                self.__Log('\n  Détail des revenus (CSG - CRDS) /  (PREL SOL)',3)
+                cm = self.GetFieldValue("F2047S2_F222")
+                gd = self.GetFieldValue("F2042S3_VG")
+                self.__Log(f'  Revenus de capitaux mobilers : ( {cm} ) / ( {cm} )',3)
+                self.__Log(f'  Plus-values et gains divers : ( {gd} ) / ( {gd} )\n',3)
+                bi = cm + gd
+                self.__Log(f'  BASE IMPOSABLE : ( {bi} ) / ( {bi} )',3)
+                micsg = round(bi * 9.70 / 100)
+                mips = round(bi * 7.50 / 100)
+                self.__Log(f'  Taux de l\'imposition : ( 9,70% ) / ( 7,50% )',3)
+                self.__Log(f'  Montant de l\'imposition : ( {micsg} ) / ( {mips} )\n',3)
+                tpsn = micsg + mips
+                self.__Log(f'  Total des prélévements sociaux nets : {tpsn}',3)
 
             self.SoldeImpot = 0
             if self.Year > 2018:
@@ -1255,6 +1333,15 @@ class Tax:
             self.__Log('  INFORMATIONS COMPLEMENTAIRES',3)
             self.RevFiscalRef = GlobalIncome + RevTauxForfaitaire
             self.__Log(f'  Revenu fiscal de référence : {self.RevFiscalRef}\n',3)
+
+            self.DeficitFoncierAnterieur = self.GetFieldValue("F2044S6_F651")
+            self.ListDeficit = self.GetFieldValue("F2044S6_F650a")
+            if self.DeficitFoncierAnterieur != 0:
+                self.__Log('\n  Reports sur les années suivantes',3)
+                self.__Log(f'  Déficits fonciers antérieurs non déduits des autres revenus : {self.DeficitFoncierAnterieur}\n',3)
+            
+            self.TauxPrelevementSource = round(IRThruProgGrid / self.GetFieldValue("F2042S1_Salaires"),2)
+            self.__Log(f'\n  Nouveau taux de prélèvement à la source : {round(self.TauxPrelevementSource*100,1)} %\n',3)
 
             if result:
                 self.bIRCalulated = True

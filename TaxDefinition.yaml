@@ -62,7 +62,7 @@ Tax:
       Compute06: "if F630 > 0: F650b,F650a,F630 = getattr(locals()['self'], 'AllocateDeficit')(F630,ListDeficit)"
       Compute07: "F651 = sum(F650a)"
       Compute08: "if F630 > 0: Benefice = F630"
-      RepportFields: "F630,F650a,F650bF651"
+      RepportFields: "F630,F650a,F650b,F651"
       Save: "Benefice,F630,F650a,F650b,F651"
     - Section: 7
       ReqFields: "F215,F240,F250,F630,F651"
@@ -137,6 +137,56 @@ Tax:
       Compute01: "F1133 = F945"
       RepportFields: "F1133"
       Save: "F1133"
+
+  DecoteGrids:
+    - Grid: 2020
+      Floors:
+        Celib: 1717
+        Couple: 2842
+      Forfait:
+        Celib: 777
+        Couple: 1286
+      Percent: 45.25
+    - Grid: 2019
+      Floors:
+        Celib: 1611
+        Couple: 2653
+      Forfait:
+        Celib: 1208
+        Couple: 1990
+      Percent: 75
+    - Grid: 2018
+      Floors:
+        Celib: 1569
+        Couple: 2585
+      Forfait:
+        Celib: 1177
+        Couple: 1939
+      Percent: 75
+    - Grid: 2017
+      Floors:
+        Celib: 1153
+        Couple: 2560
+      Forfait:
+        Celib: 1165
+        Couple: 1920
+      Percent: 75
+    - Grid: 2019
+      Floors:
+        Celib: 1553
+        Couple: 2560
+      Forfait:
+        Celib: 1165
+        Couple: 1920
+      Percent: 75
+    - Grid: 2015
+      Floors:
+        Celib: 1135
+        Couple: 1870
+      Forfait:
+        Celib: -1135
+        Couple: -1870
+      Percent: -200
 
   RangeGrids:
   - Grid: 2020
