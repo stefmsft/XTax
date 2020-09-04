@@ -10,9 +10,9 @@ Tax:
     - Section: 1
       LoopOn: "HouseholdNames"
       ReqFields: "AJ"
-      Compute05: "Salaires = getattr(locals()['self'], 'SumSectionFields')(2042,1)"
+      Compute01: "Salaires = getattr(locals()['self'], 'SumSectionFields')(2042,1,filter=['HouseholdNames','Salaires'])"
       RepportFields: "AJ,Salaires"
-      Agregate: "AJ,Salaires"
+      Agregate: "[keep],AJ,Salaires"
       Save: "Salaires"
     - Section: 2
       ReqFields: "DC,TR,CG,BH,CK"
@@ -138,139 +138,163 @@ Tax:
       RepportFields: "F1133"
       Save: "F1133"
 
-  DecoteGrids:
+  Grids:
     - Grid: 2020
-      Floors:
-        Celib: 1717
-        Couple: 2842
-      Forfait:
-        Celib: 777
-        Couple: 1286
-      Percent: 45.25
+      DecoteCalc:
+        Floors:
+          Celib: 1717
+          Couple: 2842
+        Forfait:
+          Celib: 777
+          Couple: 1286
+        Percent: 45.25
+      IrpropCalc:
+        Ranges:
+        - R1: [0,10064,0]
+        - R2: [10064,25659,11]
+        - R3: [25659,73369,30]
+        - R4: [73369,157806,41]
+        - R5: [156244,999999999,45]
     - Grid: 2019
-      Floors:
-        Celib: 1611
-        Couple: 2653
-      Forfait:
-        Celib: 1208
-        Couple: 1990
-      Percent: 75
+      DecoteCalc:
+        Floors:
+          Celib: 1611
+          Couple: 2653
+        Forfait:
+          Celib: 1208
+          Couple: 1990
+        Percent: 75
+      IrpropCalc:
+        Ranges:
+        - R1: [0,10064,0]
+        - R2: [10064,27794,14]
+        - R3: [27794,74517,30]
+        - R4: [74517,157806,41]
+        - R5: [157806,999999999,45]
     - Grid: 2018
-      Floors:
-        Celib: 1569
-        Couple: 2585
-      Forfait:
-        Celib: 1177
-        Couple: 1939
-      Percent: 75
+      DecoteCalc:
+        Floors:
+          Celib: 1569
+          Couple: 2585
+        Forfait:
+          Celib: 1177
+          Couple: 1939
+        Percent: 75
+      IrpropCalc:
+        Ranges:
+        - R1: [0,9964,0]
+        - R2: [9964,27519,14]
+        - R3: [27519,73779,30]
+        - R4: [73779,156244,41]
+        - R5: [156244,999999999,45]
     - Grid: 2017
-      Floors:
-        Celib: 1153
-        Couple: 2560
-      Forfait:
-        Celib: 1165
-        Couple: 1920
-      Percent: 75
-    - Grid: 2019
-      Floors:
-        Celib: 1553
-        Couple: 2560
-      Forfait:
-        Celib: 1165
-        Couple: 1920
-      Percent: 75
+      DecoteCalc:
+        Floors:
+          Celib: 1153
+          Couple: 2560
+        Forfait:
+          Celib: 1165
+          Couple: 1920
+        Percent: 75
+      IrpropCalc:
+        Ranges:
+        - R1: [0,9807,0]
+        - R2: [9807,27086,14]
+        - R3: [27086,72617,30]
+        - R4: [72617,153783,41]
+        - R5: [153783,999999999,45]
+    - Grid: 2016
+      DecoteCalc:
+        Floors:
+          Celib: 1553
+          Couple: 2560
+        Forfait:
+          Celib: 1165
+          Couple: 1920
+        Percent: 75
+      IrpropCalc:
+        Ranges:
+        - R1: [0,9710,0]
+        - R2: [9710,26818,14]
+        - R3: [26818,71898,30]
+        - R4: [71898,152260,41]
+        - R5: [152260,999999999,45]
     - Grid: 2015
-      Floors:
-        Celib: 1135
-        Couple: 1870
-      Forfait:
-        Celib: -1135
-        Couple: -1870
-      Percent: -200
+      DecoteCalc:
+        Floors:
+          Celib: 1135
+          Couple: 1870
+        Forfait:
+          Celib: -1135
+          Couple: -1870
+        Percent: -200
+      IrpropCalc:
+        Ranges:
+        - R1: [0,9700,0]
+        - R2: [9700,26791,14]
+        - R3: [26791,71826,30]
+        - R4: [71826,152108,41]
+        - R5: [152108,999999999,45]
+    - Grid: 2014
+      DecoteCalc:
+        Floors:
+          Celib: 1016
+          Couple: 1016
+        Forfait:
+          Celib: 508
+          Couple: 508
+        Percent: 50
+      IrpropCalc:
+        Ranges:
+        - R1: [0,9690,0]
+        - R2: [9690,26764,14]
+        - R3: [26764,71754,30]
+        - R4: [71754,151956,41]
+        - R5: [151956,999999999,45]
+    - Grid: 2013
+      DecoteCalc:
+      IrpropCalc:
+        Ranges:
+        - R1: [0,6011,0]
+        - R2: [6011,11991,6]
+        - R3: [11991,26631,14]
+        - R4: [26631,71397,30]
+        - R5: [71397,999999999,41]
+    - Grid: 2012
+      DecoteCalc:
+      IrpropCalc:
+        Ranges:
+        - R1: [0,5963,0]
+        - R2: [5963,11896,5.5]
+        - R3: [11896,26420,14]
+        - R4: [26420,70830,30]
+        - R5: [70830,999999999,40]
+    - Grid: 2011
+      DecoteCalc:
+      IrpropCalc:
+        Ranges:
+        - R1: [0,5963,0]
+        - R2: [5963,11896,5.5]
+        - R3: [11896,26420,14]
+        - R4: [26420,70830,30]
+        - R5: [70830,999999999,40]
+    - Grid: 2010
+      DecoteCalc:
+      IrpropCalc:
+        Ranges:
+        - R1: [0,5963,0]
+        - R2: [5963,11896,5.5]
+        - R3: [11896,26420,14]
+        - R4: [26420,70830,30]
+        - R5: [70830,999999999,40]
+    - Grid: 2009
+      DecoteCalc:
+      IrpropCalc:
+        Ranges:
+        - R1: [0,5875,0]
+        - R2: [5875,11720,5.5]
+        - R3: [11720,26030,14]
+        - R4: [26030,69783,30]
+        - R5: [69783,999999999,40]
 
-  RangeGrids:
-  - Grid: 2020
-    Ranges:
-    - R1: [0,10064,0]
-    - R2: [10064,25659,11]
-    - R3: [25659,73369,30]
-    - R4: [73369,157806,41]
-    - R5: [156244,999999999,45]
-  - Grid: 2019
-    Ranges:
-    - R1: [0,10064,0]
-    - R2: [10064,27794,14]
-    - R3: [27794,74517,30]
-    - R4: [74517,157806,41]
-    - R5: [157806,999999999,45]
-  - Grid: 2018
-    Ranges:
-    - R1: [0,9964,0]
-    - R2: [9964,27519,14]
-    - R3: [27519,73779,30]
-    - R4: [73779,156244,41]
-    - R5: [156244,999999999,45]
-  - Grid: 2017
-    Ranges:
-    - R1: [0,9807,0]
-    - R2: [9807,27086,14]
-    - R3: [27086,72617,30]
-    - R4: [72617,153783,41]
-    - R5: [153783,999999999,45]
-  - Grid: 2016
-    Ranges:
-    - R1: [0,9710,0]
-    - R2: [9710,26818,14]
-    - R3: [26818,71898,30]
-    - R4: [71898,152260,41]
-    - R5: [152260,999999999,45]
-  - Grid: 2015
-    Ranges:
-    - R1: [0,9700,0]
-    - R2: [9700,26791,14]
-    - R3: [26791,71826,30]
-    - R4: [71826,152108,41]
-    - R5: [152108,999999999,45]
-  - Grid: 2014
-    Ranges:
-    - R1: [0,9690,0]
-    - R2: [9690,26764,14]
-    - R3: [26764,71754,30]
-    - R4: [71754,151956,41]
-    - R5: [151956,999999999,45]
-  - Grid: 2013
-    Ranges:
-    - R1: [0,6011,0]
-    - R2: [6011,11991,6]
-    - R3: [11991,26631,14]
-    - R4: [26631,71397,30]
-    - R5: [71397,999999999,41]
-  - Grid: 2012
-    Ranges:
-    - R1: [0,5963,0]
-    - R2: [5963,11896,5.5]
-    - R3: [11896,26420,14]
-    - R4: [26420,70830,30]
-    - R5: [70830,999999999,40]
-  - Grid: 2011
-    Ranges:
-    - R1: [0,5963,0]
-    - R2: [5963,11896,5.5]
-    - R3: [11896,26420,14]
-    - R4: [26420,70830,30]
-    - R5: [70830,999999999,40]
-  - Grid: 2010
-    Ranges:
-    - R1: [0,5963,0]
-    - R2: [5963,11896,5.5]
-    - R3: [11896,26420,14]
-    - R4: [26420,70830,30]
-    - R5: [70830,999999999,40]
-  - Grid: 2009
-    Ranges:
-    - R1: [0,5875,0]
-    - R2: [5875,11720,5.5]
-    - R3: [11720,26030,14]
-    - R4: [26030,69783,30]
-    - R5: [69783,999999999,40]
 ...

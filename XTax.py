@@ -419,6 +419,8 @@ class Tax:
             self.ComputeLogBuffer.append(f'#Forms {CurForm}')
 
         result = True
+        global CurLoop
+
         currentfieldnamecontext=f"{CurForm}"
         currentloopext=""
         Sg=Steps.groupby('Section')
@@ -543,7 +545,8 @@ class Tax:
                 
                 #Foreach element in currentloopvl
                 for lctxt in currentloopvl:
-                    self.__Log(f'\nProcessing on variable {lctxt}')
+                    self.__Log(f'\nProcessing on variable {lctxt}',2)
+                    CurLoop = lctxt
 
                     if self.EnableComputeLog and lctxt!="*":
                         self.ComputeLogBuffer.append(f'#    Loop {lctxt}')
@@ -644,12 +647,18 @@ class Tax:
                             self.ReportDict[updf]=self.FieldDict[k]
 
             # Look for Agregate
+            flagkeep = False
             sFor="agregate"
             if not StepsForCurSection[StepsForCurSection['Action']==sFor].empty and WeDoCompute:
                 dfb = StepsForCurSection[StepsForCurSection['Action']==sFor].index.values.astype(int)[0]
                 agglist=StepsForCurSection.loc[dfb,"Step"].split(",")
+                if "[keep]" in agglist:
+                    flagkeep = True
+                    agglist.remove("[keep]")
                 self.__Log("\nAgregate detected")
                 self.__Log(f'\nField list to Aggregate : {agglist}')
+                if flagkeep:
+                    self.__Log('With Flag Keep enabled')
                 
                 for f in agglist:
                     f2clean=[]
@@ -660,7 +669,8 @@ class Tax:
                             self.__Log(f'Found {k} = {self.FieldDict[k]} to aggregate')
                             try:
                                 aggval = aggval + self.FieldDict[k]
-                                f2clean.append(k)
+                                if not flagkeep:
+                                    f2clean.append(k)
                             except:
                                 self.__Log(f'Exception while aggregating {k}',5)
                                 result = False
@@ -875,11 +885,27 @@ class Tax:
 #  Return:
 #        sumf : Sum of fields in the section
 #
-    def SumSectionFields(self,f,s):
+    def SumSectionFields(self,f,s,filter=[]):
         self.__Log(f'Beginning of SumSectionFields on section {s}')
-        
+
         sname = f'F{f}S{s}'
-        lstf = [self.FieldDict[k] for k in list(self.FieldDict.keys()) if sname in k[:len(sname)]]
+        locd = self.FieldDict.copy()
+        ld = []
+        if CurLoop != "":
+            for k in locd.keys():
+                if not k.endswith(CurLoop):
+                    ld.append(k)
+        for f in filter:
+            fname = f'{sname}_{f}'
+            for k in locd.keys():
+                if k.startswith(fname):
+                    if k not in ld:
+                        ld.append(k)
+
+        for e in ld:
+            del locd[e]
+
+        lstf = [locd[k] for k in list(locd.keys()) if sname in k[:len(sname)]]
         sumf = sum(lstf)
 
         self.__Log(f'End of SumSectionFields returning Sum of Fields = {sumf}')
@@ -889,7 +915,8 @@ class Tax:
 #
 #  Params:
 #
-#  Description :
+#  Description : When EnableComputeLog is enable, all Compute instruction are logged in a buffer that can be dump thru this function
+#                In theory you could replay some calulation made by XTax and get the same result. (Experimental)
 #
 #  Return:
 #
@@ -956,27 +983,34 @@ class Tax:
 
         if self.bTaxDefLoaded == False: self.LoadTaxDef()
         if self.bTaxDefLoaded:
-            Grids = self.RawTaxDef["Tax"]["RangeGrids"]
+            FoundRanges = False
+            Grids = self.RawTaxDef["Tax"]["Grids"]
             for g in Grids:
                 if g["Grid"] == year:
-                    RL = g["Ranges"]
+                    if None != g["IrpropCalc"]:
+                        FoundRanges = True
+                        RL = g["IrpropCalc"]["Ranges"]
 
-            TaxeAmount = 0
-            Rev = taxablerevenue / nbpart
+            if FoundRanges:
+                TaxeAmount = 0
+                Rev = taxablerevenue / nbpart
 
-            while (Rev > 0):
-                for i,r in enumerate(RL):
-                    a,b,c = r[f'R{i+1}']
-                    if a+1 < Rev <= b:
-                        irv = Rev - (a)
-                        self.__Log(f'Applied range {i+1} at {c}% for {irv} Euro')
-                        TaxeAmount = TaxeAmount + (irv*c/100)
-                        self.__Log(f'Added {irv*c/100} to Amount')
-                        Rev = a
+                while (Rev > 0):
+                    for i,r in enumerate(RL):
+                        a,b,c = r[f'R{i+1}']
+                        if a+1 < Rev <= b:
+                            irv = Rev - (a)
+                            self.__Log(f'Applied range {i+1} at {c}% for {irv} Euro')
+                            TaxeAmount = TaxeAmount + (irv*c/100)
+                            self.__Log(f'Added {irv*c/100} to Amount')
+                            Rev = a
 
-            taxablerevenue = int(round(TaxeAmount,0) * nbpart)
+                taxablerevenue = int(round(TaxeAmount,0) * nbpart)
 
-            self.__Log(f'Final Taxe : {taxablerevenue}')
+                self.__Log(f'Final Taxe : {taxablerevenue}')
+            else:
+                self.__Log(f'  ***WARNING*** No Tax Range found for Progressive Tax Calculation ...',3)
+
 
         self.__Log(f'End of ComputeProgressiveTax')
         return taxablerevenue
@@ -1119,6 +1153,36 @@ class Tax:
 
 #
 #
+#  Function SetFieldValue
+#
+#  Params: form,section,name,value
+#
+#  Description : Set a field value from Form,Section and name
+#
+#  Return: Old Value if exist or the new value
+#
+    def SetFieldValue(self,value,form=2042,section=0,name="catchall"):
+        self.__Log("Beginning of SetFieldValue")
+
+        oval = None
+        
+        fname = f'F{form}S{section}_{name}'
+        if fname in self.FieldDict.keys():
+            oval = self.FieldDict[fname]
+            self.__Log(f'Gathering old value for {fname}')
+
+        self.FieldDict[fname] = value
+        self.__Log(f'Loaded Field {fname} with {value}')
+
+        if oval != None:
+            ret = oval
+        else:
+            ret = value
+
+        return ret
+
+#
+#
 #  Function Decote
 #
 #  Params: Tax
@@ -1133,13 +1197,14 @@ class Tax:
         decote = 0
         founddecoteinfo = False
 
-        Grids = self.RawTaxDef["Tax"]["DecoteGrids"]
+        Grids = self.RawTaxDef["Tax"]["Grids"]
         for g in Grids:
             if g["Grid"] == self.Year:
-                founddecoteinfo = True
-                Floors = g["Floors"]
-                Forfait = g["Forfait"]
-                Percent = g["Percent"]
+                if None != g["DecoteCalc"]:
+                    founddecoteinfo = True
+                    Floors = g["DecoteCalc"]["Floors"]
+                    Forfait = g["DecoteCalc"]["Forfait"]
+                    Percent = g["DecoteCalc"]["Percent"]
 
         if self.NbParts == 1:
             category = "Celib"
@@ -1151,7 +1216,9 @@ class Tax:
             floor = Floors[category]
             if tax <= floor:
                 forfait = Forfait[category]
-                decote = forfait - (tax * Percent / 100)             
+                decote = forfait - (tax * Percent / 100)
+        else:
+            self.__Log(f'  ***WARNING*** No Decote information found for {self.Year}',3)
             
         self.__Log(f'End of Decote return {decote}')
         return decote
